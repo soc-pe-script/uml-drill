@@ -1,0 +1,116 @@
+{
+  "id": "library-lend",
+  "title": "Lending a book",
+  "source": "Original question for UML Drill.",
+  "author": "soc-pe-script",
+  "tags": ["sequence-diagram", "alt-frame", "object-creation", "return-values"],
+  "code": [
+    { "file": "Library.java", "text": "public class Library {\n    private Catalog catalog;\n\n    public void lend(String title, Member m) {\n        Book b = catalog.find(title);\n        if (b.isAvailable()) {\n            Loan loan = new Loan(b, m);\n            m.addLoan(loan);\n        } else {\n            m.notifyWaitlist(title);\n        }\n    }\n}" },
+    { "file": "Loan.java", "text": "public class Loan {\n    private Book book;\n    private Member member;\n\n    public Loan(Book b, Member m) {\n        book = b;\n        member = m;\n        b.markLent();\n    }\n}" },
+    { "file": "Others.java", "text": "// Catalog:  Book find(String title)\n// Book:     boolean isAvailable(), void markLent()\n// Member:   void addLoan(Loan l), void notifyWaitlist(String title)" }
+  ],
+  "parts": [
+    {
+      "id": "a",
+      "mode": "sequence",
+      "prompt": "Draw a sequence diagram for lend(title, m) being called on a Library object. Show activation bars, return values, and object creation.",
+      "canvas": { "width": 1000, "height": 760 },
+      "starter": {
+        "lifelines": [
+          { "id": "lib", "name": ":Library", "kind": "object" },
+          { "id": "cat", "name": ":Catalog", "kind": "object" },
+          { "id": "b", "name": ":Book", "kind": "object" },
+          { "id": "loan", "name": ":Loan", "kind": "object" },
+          { "id": "m", "name": ":Member", "kind": "object" }
+        ],
+        "rows": []
+      },
+      "key": {
+        "lifelines": [
+          { "ref": "lib", "class": "Library" },
+          { "ref": "cat", "class": "Catalog" },
+          { "ref": "b", "class": "Book" },
+          { "ref": "loan", "class": "Loan", "created": true },
+          { "ref": "m", "class": "Member" }
+        ],
+        "entry": { "to": "lib", "method": "lend", "args": 2 },
+        "body": [
+          { "call": "cat", "method": "find", "args": 1, "returns": "b" },
+          { "call": "b", "method": "isAvailable", "args": 0, "returns": "a boolean" },
+          {
+            "frame": "alt",
+            "branches": [
+              {
+                "guardExample": "[b is available]",
+                "body": [
+                  { "create": "loan", "args": 2, "body": [{ "call": "b", "method": "markLent", "args": 0 }] },
+                  { "call": "m", "method": "addLoan", "args": 1 }
+                ]
+              },
+              { "guardExample": "[else]", "body": [{ "call": "m", "method": "notifyWaitlist", "args": 1 }] }
+            ]
+          }
+        ]
+      },
+      "model": {
+        "lifelines": [
+          { "id": "lib", "name": ":Library", "kind": "object" },
+          { "id": "cat", "name": ":Catalog", "kind": "object" },
+          { "id": "b", "name": "b:Book", "kind": "object" },
+          { "id": "loan", "name": ":Loan", "kind": "object" },
+          { "id": "m", "name": "m:Member", "kind": "object" }
+        ],
+        "rows": [
+          { "id": "r1", "type": "call", "from": "@start", "to": "lib", "label": "lend(title, m)" },
+          { "id": "r2", "type": "call", "from": "lib", "to": "cat", "label": "find(title)" },
+          { "id": "r3", "type": "return", "from": "cat", "to": "lib", "label": "b" },
+          { "id": "r4", "type": "call", "from": "lib", "to": "b", "label": "isAvailable()" },
+          { "id": "r5", "type": "return", "from": "b", "to": "lib", "label": "true/false" },
+          { "id": "r6", "type": "frame", "frame": "alt", "guard": "b is available" },
+          { "id": "r7", "type": "create", "from": "lib", "to": "loan", "label": "Loan(b, m)" },
+          { "id": "r8", "type": "call", "from": "loan", "to": "b", "label": "markLent()" },
+          { "id": "r9", "type": "return", "from": "b", "to": "loan", "label": "" },
+          { "id": "r10", "type": "return", "from": "loan", "to": "lib", "label": "" },
+          { "id": "r11", "type": "call", "from": "lib", "to": "m", "label": "addLoan(loan)" },
+          { "id": "r12", "type": "return", "from": "m", "to": "lib", "label": "" },
+          { "id": "r13", "type": "else", "guard": "else" },
+          { "id": "r14", "type": "call", "from": "lib", "to": "m", "label": "notifyWaitlist(title)" },
+          { "id": "r15", "type": "return", "from": "m", "to": "lib", "label": "" },
+          { "id": "r16", "type": "end" }
+        ]
+      },
+      "examples": [
+        {
+          "name": "Minimal notation: no return arrows",
+          "expect": { "errors": 0, "notes": 2 },
+          "patch": { "removeRows": ["r3", "r5", "r9", "r10", "r12", "r15"] }
+        },
+        {
+          "name": "opt frame used for an if/else",
+          "expect": { "errors": 2 },
+          "patch": { "rows": { "r6": { "frame": "opt" } } }
+        },
+        {
+          "name": "markLent() sent by Library instead of inside the Loan constructor",
+          "expect": { "errors": 1 },
+          "patch": { "rows": { "r8": { "from": "lib" } }, "removeRows": ["r9", "r10"] }
+        },
+        {
+          "name": "Loan reached by a normal call instead of creation",
+          "expect": { "errors": 1 },
+          "patch": { "rows": { "r7": { "type": "call" } } }
+        },
+        {
+          "name": "Return goes to the wrong lifeline",
+          "expect": { "errors": 1 },
+          "patch": { "rows": { "r3": { "to": "b" } } }
+        },
+        {
+          "name": "No incoming call, missing guard",
+          "expect": { "errors": 2 },
+          "patch": { "removeRows": ["r1"], "rows": { "r13": { "guard": "" } } }
+        }
+      ]
+    }
+  ]
+}

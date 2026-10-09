@@ -16,7 +16,14 @@ You are helping someone add a question to UML Drill, a practice tool for CS2103T
    - `extends` → `inheritance`; `implements` → `realization`.
    - Constructors → `optionalMethods`.
    - Abstract methods → `"abstract": true`. Static → `"static": true`.
-5. **Write the model answer** as a diagram (`nodes`, `edges`). Node and edge ids must be unique. Lay boxes out without overlap on a 1000×640 canvas: boxes are about 150–300 px wide and 60–140 px tall. Put parents above children.
+   For a **sequence** part, trace the method the question names, line by line:
+   - Each call on another object → `{ "call": ref, "method", "args" }`, with `returns` if it returns a value. Calls made inside that method go in its `body`.
+   - A call on `this` (including private helpers) → a call to the same ref (self-call), with its own `body`.
+   - `new X(...)` → `{ "create": ref }` and mark that lifeline `"created": true`. Calls inside the constructor go in its `body`.
+   - `ClassName.method()` → a call to a lifeline with `"static": true`.
+   - `for`/`while` around calls → `loop`; `if/else` with calls in both branches → `alt` with two branches; `if` alone → `opt`. Never add a frame that wraps no calls.
+   - Calls in an `if` condition happen before the frame.
+5. **Write the model answer** as a diagram (`nodes`, `edges`; or `lifelines`, `rows` for sequence parts). Node and edge ids must be unique. Lay boxes out without overlap on a 1000×640 canvas: boxes are about 150–300 px wide and 60–140 px tall. Put parents above children.
 6. **Write at least three `examples` per part**, each a patch of the model with a realistic mistake and the exact expected error count.
 7. **Run `node scripts/check.js <id> -v`.** Fix the question until it passes. Never change `grader.js` to make your question pass.
 8. **Report back**: list every judgement call (accepted alternatives, optional items, unknown multiplicities) so the person can review them before opening the PR.

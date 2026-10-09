@@ -118,6 +118,58 @@ Things the grader does without being told:
 
 Values are compared without quotes, so `"spanner"` and `spanner` both match.
 
+### Sequence diagrams
+
+A sequence part has `"mode": "sequence"`. Its diagrams use `lifelines` and `rows` instead of nodes and edges:
+
+```jsonc
+"model": {
+  "lifelines": [
+    { "id": "cart", "name": ":Cart", "kind": "object" },       // kind: object | class (static) | actor
+    { "id": "receipt", "name": "Receipt", "kind": "class" }
+  ],
+  "rows": [                                                     // top to bottom
+    { "id": "r1", "type": "call", "from": "@start", "to": "cart", "label": "checkout(c)" },
+    { "id": "r2", "type": "frame", "frame": "loop", "guard": "for each item" },
+    { "id": "r3", "type": "call", "from": "cart", "to": "item", "label": "getPrice()" },
+    { "id": "r4", "type": "return", "from": "item", "to": "cart", "label": "price" },
+    { "id": "r5", "type": "end" }
+  ]
+}
+```
+
+Row types: `call`, `return`, `create`, `delete`, `frame` (with `frame`: loop, alt, opt or par, and `guard`), `else` (with `guard`), `end`. `@start` is the start dot for the first incoming call. Activation bars are not stored; they follow from the calls and returns.
+
+The key describes the expected call tree, not the drawing:
+
+```jsonc
+"key": {
+  "lifelines": [
+    { "ref": "cart", "class": "Cart" },
+    { "ref": "loan", "class": "Loan", "created": true },
+    { "ref": "receipt", "class": "Receipt", "static": true, "staticHint": "print" }
+  ],
+  "entry": { "to": "cart", "method": "checkout", "args": 1, "returns": "total" },
+  "body": [                                   // what happens inside the entry call, in order
+    { "frame": "loop", "branches": [{ "guardExample": "[for each item]", "body": [
+      { "call": "item", "method": "getPrice", "args": 0, "returns": "price" }
+    ] }] },
+    { "call": "cart", "method": "applyDiscount", "args": 2, "returns": "total",
+      "body": [ { "call": "c", "method": "isMember", "args": 0 } ] },   // nested calls
+    { "create": "loan", "args": 2 },
+    { "call": "receipt", "method": "print", "args": 1 }
+  ]
+}
+```
+
+- `returns` marks a method that returns a value. A missing return arrow is a note (minimal notation); a labelled return on a void method is an error.
+- `args` is the argument count; names are not checked.
+- Lifeline names are not checked beyond the `:Class` / `name:Class` format.
+- A frame with no calls inside, a call in the wrong activation, or the wrong frame type are errors.
+- An `alt` frame lists one entry in `branches` per part; `loop` and `opt` have one.
+
+Sequence examples patch rows instead of edges: `"rows": { "r3": { "to": "b" } }`, `"removeRows"`, `"addRows": [{ "after": "r8", "row": { ... } }]`, `"lifelines": { ... }`, or `"order": [every row id in the new order]`.
+
 ## Handling ambiguity
 
 CS2103T marking is flexible, and questions will often be ambiguous. Encode that in the key instead of picking one answer:

@@ -1,0 +1,82 @@
+{
+  "id": "cart-checkout",
+  "title": "Checking out a cart",
+  "source": "Original question for UML Drill.",
+  "author": "soc-pe-script",
+  "tags": ["sequence-diagram", "loop-frame", "self-invocation", "static-call"],
+  "code": [
+    { "file": "Cart.java", "text": "public class Cart {\n    private List<Item> items;\n\n    public double checkout(Customer c) {\n        double total = 0;\n        for (Item i : items) {\n            total += i.getPrice();\n        }\n        total = applyDiscount(total, c);\n        Receipt.print(total);\n        return total;\n    }\n\n    private double applyDiscount(double total, Customer c) {\n        if (c.isMember()) {\n            return total * 0.9;\n        }\n        return total;\n    }\n}" },
+    { "file": "Others.java", "text": "// Item:     double getPrice()\n// Customer: boolean isMember()\n// Receipt:  static void print(double amount)" }
+  ],
+  "parts": [
+    {
+      "id": "a",
+      "mode": "sequence",
+      "prompt": "Draw a sequence diagram for checkout(c) being called on a Cart object. Show activation bars and return values. Use one lifeline for the Item objects.",
+      "canvas": { "width": 1000, "height": 640 },
+      "starter": { "lifelines": [], "rows": [] },
+      "key": {
+        "lifelines": [
+          { "ref": "cart", "class": "Cart" },
+          { "ref": "item", "class": "Item" },
+          { "ref": "c", "class": "Customer" },
+          { "ref": "receipt", "class": "Receipt", "static": true, "staticHint": "print" }
+        ],
+        "entry": { "to": "cart", "method": "checkout", "args": 1, "returns": "total" },
+        "body": [
+          { "frame": "loop", "branches": [{ "guardExample": "[for each item]", "body": [{ "call": "item", "method": "getPrice", "args": 0, "returns": "price" }] }] },
+          { "call": "cart", "method": "applyDiscount", "args": 2, "returns": "the discounted total", "body": [{ "call": "c", "method": "isMember", "args": 0, "returns": "a boolean" }] },
+          { "call": "receipt", "method": "print", "args": 1 }
+        ]
+      },
+      "model": {
+        "lifelines": [
+          { "id": "cart", "name": ":Cart", "kind": "object" },
+          { "id": "item", "name": ":Item", "kind": "object" },
+          { "id": "c", "name": "c:Customer", "kind": "object" },
+          { "id": "receipt", "name": "Receipt", "kind": "class" }
+        ],
+        "rows": [
+          { "id": "r1", "type": "call", "from": "@start", "to": "cart", "label": "checkout(c)" },
+          { "id": "r2", "type": "frame", "frame": "loop", "guard": "for each item" },
+          { "id": "r3", "type": "call", "from": "cart", "to": "item", "label": "getPrice()" },
+          { "id": "r4", "type": "return", "from": "item", "to": "cart", "label": "price" },
+          { "id": "r5", "type": "end" },
+          { "id": "r6", "type": "call", "from": "cart", "to": "cart", "label": "applyDiscount(total, c)" },
+          { "id": "r7", "type": "call", "from": "cart", "to": "c", "label": "isMember()" },
+          { "id": "r8", "type": "return", "from": "c", "to": "cart", "label": "true/false" },
+          { "id": "r9", "type": "return", "from": "cart", "to": "cart", "label": "total" },
+          { "id": "r10", "type": "call", "from": "cart", "to": "receipt", "label": "print(total)" },
+          { "id": "r11", "type": "return", "from": "cart", "to": "@start", "label": "total" }
+        ]
+      },
+      "examples": [
+        {
+          "name": "isMember() drawn after applyDiscount() has returned",
+          "expect": { "errors": 1 },
+          "patch": { "order": ["r1", "r2", "r3", "r4", "r5", "r6", "r9", "r7", "r8", "r10", "r11"] }
+        },
+        {
+          "name": "Static call drawn to an object lifeline",
+          "expect": { "errors": 1 },
+          "patch": { "lifelines": { "receipt": { "name": ":Receipt", "kind": "object" } } }
+        },
+        {
+          "name": "Loop frame left out",
+          "expect": { "errors": 1 },
+          "patch": { "removeRows": ["r2", "r5"] }
+        },
+        {
+          "name": "Empty opt frame for the if in applyDiscount",
+          "expect": { "errors": 1 },
+          "patch": { "addRows": [{ "after": "r8", "row": { "id": "x1", "type": "frame", "frame": "opt", "guard": "isMember" } }, { "after": "x1", "row": { "id": "x2", "type": "end" } }] }
+        },
+        {
+          "name": "print() given a return value",
+          "expect": { "errors": 1 },
+          "patch": { "addRows": [{ "after": "r10", "row": { "id": "x3", "type": "return", "from": "receipt", "to": "cart", "label": "done" } }] }
+        }
+      ]
+    }
+  ]
+}

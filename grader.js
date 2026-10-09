@@ -557,16 +557,372 @@
     return r.issues;
   }
 
+  // ---------- sequence diagrams ----------
+  //
+  // Stored diagram: { lifelines: [{ id, name, kind: 'object'|'class'|'actor' }],
+  //                   rows: [{ id, type, ... }] }   (rows are in top-to-bottom order)
+  // Row types: call | return | create | delete  { from, to, label }
+  //            frame { frame: 'loop'|'alt'|'opt'|'par', guard } | else { guard } | end
+  // from may be '@start' (a call coming in from outside the diagram).
+
+  const START = '@start';
+  const FRAME_TYPES = ['loop', 'alt', 'opt', 'par'];
+
+  /** "lend(title, m)" -> { name: 'lend', args: ['title','m'], hasParens: true }; also accepts "b = find(t)". */
+  function parseCall(label) {
+    let s = clean(label);
+    const eq = s.match(/^[\w.]+\s*=\s*(.+)$/);
+    if (eq && eq[1].includes('(')) s = eq[1];
+    s = s.replace(/^new\s+/, '');
+    const i = s.indexOf('(');
+    if (i < 0) return { name: s, args: [], hasParens: false };
+    const close = s.lastIndexOf(')');
+    const inner = s.slice(i + 1, close > i ? close : s.length);
+    return { name: clean(s.slice(0, i)).replace(/^.*\./, ''), args: splitParams(inner), hasParens: true };
+  }
+
+  /** Lifeline header -> { objName, className, isStatic, hasColon } */
+  function parseLifeline(l) {
+    let s = clean(l.name);
+    let isStatic = l.kind === 'class';
+    s = s.replace(/<<\s*class\s*>>|«\s*class\s*»/gi, () => { isStatic = true; return ' '; });
+    s = clean(s);
+    const i = s.indexOf(':');
+    if (i >= 0) return { objName: clean(s.slice(0, i)), className: clean(s.slice(i + 1)), isStatic, hasColon: true, kind: l.kind };
+    return { objName: '', className: s, isStatic, hasColon: false, kind: l.kind };
+  }
+
+  /**
+   * Turn rows into a call tree. Missing return arrows are allowed (minimal notation):
+   * a message sent by X ends any newer activations above X's.
+   * Returns { root, problems, acts, frames } — acts/frames carry row indexes for drawing.
+   */
+  function buildSeqTree(d) {
+    const rows = d.rows || [];
+    const lifes = {};
+    (d.lifelines || []).forEach((l) => { lifes[l.id] = l; });
+    const isOutside = (id) => id === START || (lifes[id] && lifes[id].kind === 'actor');
+    const nm = (id) => (id === START ? 'the caller' : lifes[id] ? clean(lifes[id].name) || '(unnamed)' : '?');
+
+    const problems = [];
+    const acts = [];
+    const frames = [];
+    const root = { kind: 'root', children: [] };
+    const stack = [{ t: 'act', node: root, who: null, info: null }];
+    const list = () => { const e = stack[stack.length - 1]; return e.t === 'act' ? e.node.children : e.node.branches[e.node.branches.length - 1].children; };
+    const findAct = (who) => { for (let i = stack.length - 1; i > 0; i--) if (stack[i].t === 'act' && stack[i].who === who) return i; return -1; };
+    const findFrame = () => { for (let i = stack.length - 1; i > 0; i--) if (stack[i].t === 'frame') return i; return -1; };
+    const framesAbove = (idx) => stack.slice(idx + 1).filter((e) => e.t === 'frame');
+    const popTo = (idx, k, viaReturn) => {
+      while (stack.length - 1 > idx) {
+        const e = stack.pop();
+        if (e.t === 'act' && e.info) e.info.end = viaReturn && stack.length === idx + 1 ? k : k - 0.5;
+        if (e.t === 'frame') e.info.end = k - 0.5;
+      }
+    };
+    const depthOf = (who) => stack.filter((e) => e.t === 'act' && e.who === who).length;
+    // A frame belongs to whoever sends the first message inside it, so it is opened lazily:
+    // without return arrows, "frame" may come right after a call whose activation is about to end.
+    let pending = [];
+    const openPending = () => {
+      for (const { row, k } of pending) {
+        const node = { kind: 'frame', frame: row.frame, row: row.id, branches: [{ guard: clean(row.guard), row: row.id, children: [] }] };
+        list().push(node);
+        const info = { start: k, end: rows.length - 0.5, elses: [], depth: stack.filter((e) => e.t === 'frame').length, frame: row.frame, row: row.id, guard: clean(row.guard) };
+        frames.push(info);
+        stack.push({ t: 'frame', node, info });
+      }
+      pending = [];
+    };
+
+    rows.forEach((row, k) => {
+      const ref = { row: row.id };
+      if (row.type === 'call' || row.type === 'create' || row.type === 'delete') {
+        let idx = isOutside(row.from) ? 0 : findAct(row.from);
+        if (idx < 0) {
+          if (stack.length === 1 && !root.children.length) {
+            // diagram starts without an incoming call: treat the first sender as already running
+            stack.push({ t: 'act', node: root, who: row.from, info: null });
+            idx = 1;
+          } else {
+            problems.push({ sev: 'error', where: nm(row.from), msg: `${nm(row.from)} sends "${clean(row.label) || row.type}" but has no running method at that point. Messages must come from an active lifeline.`, ref });
+            idx = stack.length - 1;
+          }
+        }
+        // end newer activations (implicit returns); a frame opened inside one of them cannot stay open
+        while (stack.length - 1 > idx) {
+          const e = stack[stack.length - 1];
+          if (e.t === 'act') { stack.pop(); if (e.info) e.info.end = k - 0.5; continue; }
+          if (!stack.slice(idx + 1, stack.length - 1).some((x) => x.t === 'act')) break;
+          problems.push({ sev: 'error', where: nm(row.from), msg: `"${clean(row.label) || row.type}" is sent by ${nm(row.from)}, but the ${e.node.frame} frame opened inside a later call is still open. End that frame first.`, ref });
+          stack.pop(); e.info.end = k - 0.5;
+        }
+        openPending();
+        const node = { kind: row.type, from: row.from, to: row.to, label: clean(row.label), row: row.id, children: [], ret: null };
+        list().push(node);
+        if (row.type !== 'delete') {
+          const info = { who: row.to, start: k, end: rows.length - 0.5, depth: depthOf(row.to), row: row.id };
+          acts.push(info);
+          stack.push({ t: 'act', node, who: row.to, info });
+        }
+      } else if (row.type === 'return') {
+        openPending();
+        const idx = findAct(row.from);
+        if (idx < 0) { problems.push({ sev: 'error', where: nm(row.from), msg: `Return from ${nm(row.from)}, but it has no running method to return from.`, ref }); return; }
+        const crossing = framesAbove(idx);
+        if (crossing.length) problems.push({ sev: 'error', where: nm(row.from), msg: `This return leaves an open ${crossing[crossing.length - 1].node.frame} frame. End the frame before returning.`, ref });
+        let below = idx - 1;
+        while (below > 0 && stack[below].t !== 'act') below--;
+        const caller = stack[below].who;
+        const ok = caller === null ? isOutside(row.to) || row.to === row.from : row.to === caller;
+        if (!ok) problems.push({ sev: 'error', where: nm(row.from), msg: `The return should go back to ${caller === null ? 'the caller' : nm(caller)}, which made the call.`, ref });
+        stack[idx].node.ret = { label: clean(row.label), row: row.id };
+        popTo(idx - 1, k, true);
+      } else if (row.type === 'frame') {
+        pending.push({ row, k });
+      } else if (row.type === 'else' || row.type === 'end') {
+        openPending();
+        const idx = findFrame();
+        if (idx < 0) { problems.push({ sev: 'error', where: 'Frame', msg: row.type === 'else' ? 'An else divider sits outside any frame.' : 'A frame end has no matching frame start.', ref }); return; }
+        popTo(idx, k, false);
+        const f = stack[idx];
+        if (row.type === 'else') {
+          if (!['alt', 'par'].includes(f.node.frame)) problems.push({ sev: 'error', where: f.node.frame, msg: `Only alt and par frames are split into parts; a ${f.node.frame} frame has one part.`, ref });
+          f.node.branches.push({ guard: clean(row.guard), row: row.id, children: [] });
+          f.info.elses.push({ at: k, guard: clean(row.guard), row: row.id });
+        } else {
+          f.info.end = k;
+          stack.splice(idx, 1);
+        }
+      }
+    });
+    openPending();
+    stack.filter((e) => e.t === 'frame').forEach((e) => problems.push({ sev: 'error', where: e.node.frame, msg: `The ${e.node.frame} frame is never closed. Add a frame end.`, ref: { row: e.node.row } }));
+    return { root, problems, acts, frames };
+  }
+
+  function gradeSequenceDiagram(key, diagram) {
+    const r = makeReporter();
+    const d = { lifelines: diagram.lifelines || [], rows: diagram.rows || [] };
+    const tree = buildSeqTree(d);
+    tree.problems.forEach((p) => r.issues.push(p));
+
+    // ---- map lifelines to key refs ----
+    const parsed = {};
+    d.lifelines.forEach((l) => { parsed[l.id] = parseLifeline(l); });
+    const refOf = {};       // lifeline id -> key ref
+    const lifeOf = {};      // key ref -> lifeline id
+    const missingRefs = new Set();
+    const extraLifes = new Set();
+    const keyL = key.lifelines || [];
+    for (const kl of keyL) {
+      const hit = d.lifelines.find((l) => !refOf[l.id] && l.kind !== 'actor' && parsed[l.id].className === kl.class);
+      if (!hit) { r.error(`:${kl.class}`, `Missing lifeline for ${kl.static ? 'the class ' + kl.class : 'a ' + kl.class + ' object'}.`); missingRefs.add(kl.ref); continue; }
+      refOf[hit.id] = kl.ref; lifeOf[kl.ref] = hit.id;
+      const p = parsed[hit.id];
+      const ref = { lifeline: hit.id };
+      if (kl.static && !p.isStatic) r.error(`:${kl.class}`, `${kl.class}.${kl.staticHint || 'method'}() is a static call. Draw ${kl.class} as a class lifeline: <<class>> ${kl.class}, with no colon.`, ref);
+      if (!kl.static && p.isStatic) r.error(`:${kl.class}`, `${kl.class} is an object here, not a class. Write it as :${kl.class} or name:${kl.class}.`, ref);
+      if (!kl.static && !p.isStatic && !p.hasColon) r.error(`${p.className}`, `Object lifelines are written :${kl.class} or name:${kl.class}.`, ref);
+    }
+    d.lifelines.forEach((l) => {
+      if (refOf[l.id] || l.kind === 'actor') return;
+      extraLifes.add(l.id);
+      r.error(clean(l.name) || 'Lifeline', `Unexpected lifeline ${clean(l.name)}. Nothing in the code calls it.`, { lifeline: l.id });
+    });
+    const createdRefs = new Set(keyL.filter((k) => k.created).map((k) => k.ref));
+    const lname = (ref) => { const kl = keyL.find((k) => k.ref === ref); return kl ? (kl.static ? kl.class : ':' + kl.class) : ref; };
+
+    // ---- compare trees ----
+    const expKey = (e) => e.frame ? 'frame:' + e.frame : (e.create ? 'create:' + e.create : 'call:' + e.call + ':' + e.method);
+    const actKey = (a) => {
+      if (a.kind === 'frame') return 'frame:' + a.frame;
+      const t = refOf[a.to] || '?' + a.to;
+      if (a.kind === 'create') return 'create:' + t;
+      if (a.kind === 'delete') return 'delete:' + t;
+      return 'call:' + t + ':' + parseCall(a.label).name;
+    };
+    const descE = (e) => e.frame ? `the ${e.frame} frame` : e.create ? `the creation of ${lname(e.create)}` : `${e.method}() on ${lname(e.call)}`;
+    const descA = (a) => a.kind === 'frame' ? `${a.frame} frame` : a.kind === 'create' ? `creation of ${clean((d.lifelines.find((l) => l.id === a.to) || {}).name)}` : `"${a.label || '(no label)'}"`;
+    const firstRow = (a) => (a.kind === 'frame' ? { row: a.row } : { row: a.row });
+    const looseOK = (e, a) => {
+      if (e.frame) return a.kind === 'frame';
+      if (a.kind === 'frame') return false;
+      const target = e.create || e.call;
+      return refOf[a.to] === target || (a.kind === e.create ? 'create' : 'call') === a.kind;
+    };
+
+    const missing = [];   // { e, ctx }
+    const unexpected = []; // { a, ctx }
+
+    function lcs(E, A) {
+      const n = E.length, m = A.length;
+      const dp = Array.from({ length: n + 1 }, () => new Array(m + 1).fill(0));
+      for (let i = n - 1; i >= 0; i--) for (let j = m - 1; j >= 0; j--) dp[i][j] = expKey(E[i]) === actKey(A[j]) ? 1 + dp[i + 1][j + 1] : Math.max(dp[i + 1][j], dp[i][j + 1]);
+      const pairs = [];
+      let i = 0, j = 0;
+      while (i < n && j < m) {
+        if (expKey(E[i]) === actKey(A[j])) { pairs.push([i, j]); i++; j++; }
+        else if (dp[i + 1][j] >= dp[i][j + 1]) i++; else j++;
+      }
+      return pairs;
+    }
+
+    function compareList(E, A, ctx, parent) {
+      E = E.filter((e) => !(e.call && missingRefs.has(e.call)) && !(e.create && missingRefs.has(e.create)));
+      A = A.filter((a) => a.kind === 'frame' || !extraLifes.has(a.to));
+      const pairs = lcs(E, A);
+      let pi = 0, pj = 0;
+      const segs = pairs.concat([[E.length, A.length]]);
+      for (const [mi, mj] of segs) {
+        const gapE = E.slice(pi, mi), gapA = A.slice(pj, mj);
+        // pair loosely-compatible items in the same gap, in order
+        const usedA = new Set();
+        for (const e of gapE) {
+          const a = gapA.find((x) => !usedA.has(x) && looseOK(e, x) && (e.frame || refOf[x.to] === (e.create || e.call)));
+          if (a) { usedA.add(a); compareItem(e, a, ctx, true); }
+          else missing.push({ e, ctx });
+        }
+        gapA.filter((a) => !usedA.has(a)).forEach((a) => unexpected.push({ a, ctx, parent }));
+        if (mi < E.length) compareItem(E[mi], A[mj], ctx, false);
+        pi = mi + 1; pj = mj + 1;
+      }
+    }
+
+    function compareItem(e, a, ctx, loose) {
+      const ref = firstRow(a);
+      if (e.frame) {
+        if (a.frame !== e.frame && !(e.accept || []).includes(a.frame)) r.error(ctx, `Use a ${e.frame} frame here, not ${a.frame}. ${e.hint || FRAME_HINT[e.frame]}`, ref);
+        const eb = e.branches || [{ body: e.body || [] }];
+        if (a.frame === e.frame && eb.length !== a.branches.length) r.error(ctx, `The ${e.frame} frame should have ${eb.length} part${eb.length === 1 ? '' : 's'}${e.frame === 'alt' ? ' (one per branch of the if/else)' : ''}, not ${a.branches.length}.`, ref);
+        a.branches.forEach((b, bi) => { if (!b.guard) r.error(ctx, `Add a guard condition in square brackets to ${a.branches.length > 1 ? 'part ' + (bi + 1) + ' of ' : ''}the ${a.frame} frame, e.g. ${(eb[bi] && eb[bi].guardExample) || (e.frame === 'loop' ? '[for each item]' : '[else]')}.`, { row: b.row }); });
+        eb.forEach((b, bi) => {
+          const ab = a.branches[bi];
+          compareList(b.body || [], ab ? ab.children : [], `inside the ${e.frame} frame${eb.length > 1 ? ' (part ' + (bi + 1) + ')' : ''}`);
+        });
+        // extra branches: their contents are unexpected
+        a.branches.slice(eb.length).forEach((b) => b.children.forEach((c) => unexpected.push({ a: c, ctx })));
+        return;
+      }
+      const target = e.create || e.call;
+      if (refOf[a.to] !== target) {
+        r.error(ctx, `${descA(a)} goes to the wrong lifeline; ${descE(e)} is expected here.`, ref);
+      }
+      if (e.create && a.kind !== 'create') r.error(ctx, `${lname(e.create)} is created here. Point the arrow at the ${lname(e.create)} box and place the box at this height (use the Create message).`, ref);
+      if (e.call && a.kind === 'create') r.error(ctx, `${lname(e.call)} already exists; this is a normal call, not a creation.`, ref);
+      if (a.kind === 'delete') r.error(ctx, `${descE(e)} is expected here, not a deletion.`, ref);
+      if (e.call && a.kind === 'call') {
+        const pc = parseCall(a.label);
+        if (pc.name !== e.method) r.error(ctx, `"${a.label}" should call ${e.method}().`, ref);
+        else if (!pc.hasParens) r.error(ctx, `Write the call with brackets: ${e.method}(${'…'.repeat(Math.min(1, e.args || 0))}).`, ref);
+        else if (e.args !== undefined && pc.args.length !== e.args) r.error(ctx, `"${a.label}" should pass ${e.args} argument${e.args === 1 ? '' : 's'}.`, ref);
+      }
+      if (e.create && a.kind === 'create' && a.label) {
+        const pc = parseCall(a.label);
+        if (pc.hasParens && e.args !== undefined && pc.args.length !== e.args) r.note(ctx, `"${a.label}": the constructor takes ${e.args} argument${e.args === 1 ? '' : 's'}.`, ref);
+      }
+      // return value
+      if (e.returns) {
+        if (!a.ret) r.note(ctx, `${descE(e)} returns ${e.returns}. A dashed return arrow labelled ${e.returns} makes that clear (it may be left out in minimal notation).`, ref);
+        else if (!a.ret.label) r.note(ctx, `Label the return arrow of ${e.method || 'the call'}() with the value, e.g. ${e.returns}.`, { row: a.ret.row });
+      } else if (a.ret && a.ret.label && !e.create) {
+        r.error(ctx, `${e.method}() returns nothing, so its return arrow has no value. Remove "${a.ret.label}" or the arrow.`, { row: a.ret.row });
+      }
+      if (e.create && a.kind === 'create' && !createdRefs.has(e.create)) r.error(ctx, `${lname(e.create)} is not created in this scenario.`, ref);
+      compareList(e.body || [], a.children || [], `inside ${e.create ? 'the ' + lname(e.create) + ' constructor' : e.method + '()'}`, a);
+    }
+
+    // entry call
+    const ent = key.entry;
+    const top = tree.root.children;
+    const entryIdx = top.findIndex((a) => a.kind === 'call' && refOf[a.to] === ent.to && parseCall(a.label).name === ent.method);
+    let body;
+    if (entryIdx < 0) {
+      r.error('Start', `Show the incoming call ${ent.method}(…) arriving at ${lname(ent.to)} from the left (use the Call tool from the start dot).`);
+      body = top;
+    } else {
+      const a = top[entryIdx];
+      const ref = { row: a.row };
+      if (!(a.from === START || (d.lifelines.find((l) => l.id === a.from) || {}).kind === 'actor')) r.error('Start', `The first call ${ent.method}() comes from outside the diagram. Start it from the start dot (or an actor).`, ref);
+      const pc = parseCall(a.label);
+      if (!pc.hasParens) r.error('Start', `Write the call with brackets: ${ent.method}(…).`, ref);
+      else if (ent.args !== undefined && pc.args.length !== ent.args) r.error('Start', `"${a.label}" should pass ${ent.args} argument${ent.args === 1 ? '' : 's'}.`, ref);
+      if (ent.returns && (!a.ret || !a.ret.label)) r.note('Start', `${ent.method}() returns ${ent.returns}. Show a dashed return arrow labelled ${ent.returns} back to the caller.`, ref);
+      top.forEach((x, i) => { if (i !== entryIdx) unexpected.push({ a: x, ctx: 'outside the ' + ent.method + '() call' }); });
+      body = a.children;
+    }
+    compareList(key.body || [], body, `inside ${ent.method}()`);
+
+    // a missing frame whose calls are drawn without it -> one error
+    for (const m of missing) {
+      if (!m.e.frame) continue;
+      const inner = (m.e.branches || [{ body: m.e.body || [] }]).flatMap((b) => b.body || []).map(expKey);
+      const hits = unexpected.filter((u) => !u.done && u.ctx === m.ctx && inner.includes(actKey(u.a)));
+      if (!hits.length) continue;
+      hits.forEach((u) => { u.done = true; });
+      m.done = true;
+      r.error(m.ctx, `Missing the ${m.e.frame} frame around ${hits.map((u) => descA(u.a)).join(', ')}. ${m.e.hint || FRAME_HINT[m.e.frame]}`, firstRow(hits[0].a));
+    }
+    // pair "missing here" with "unexpected there" -> one "wrong place" error
+    for (const m of missing) {
+      if (m.done) continue;
+      const k = expKey(m.e);
+      const u = unexpected.find((x) => !x.done && actKey(x.a) === k);
+      if (u) {
+        u.done = true; m.done = true;
+        const pa = u.parent;
+        const selfHint = pa && pa.kind === 'call' && pa.from === pa.to && !pa.ret ? ` The self-call ${parseCall(pa.label).name}() has no return arrow, so later messages from that lifeline stay inside it. Add a return to end it.` : '';
+        r.error(u.ctx, `${descE(m.e)} is in the wrong place. It should happen ${m.ctx}, but it is drawn ${u.ctx}.${selfHint}`, firstRow(u.a));
+      }
+    }
+    missing.filter((m) => !m.done).forEach((m) => r.error(m.ctx, `Missing ${descE(m.e)} ${m.ctx}.${m.e.hint ? ' ' + m.e.hint : ''}`));
+    unexpected.filter((u) => !u.done).forEach((u) => {
+      const a = u.a;
+      if (a.kind === 'frame' && !a.branches.some((b) => b.children.length)) r.error(u.ctx, `This ${a.frame} frame has no messages inside. Frames only wrap calls; remove it.`, firstRow(a));
+      else r.error(u.ctx, `Unexpected ${descA(a)} ${u.ctx}. The code does not do this here.`, firstRow(a));
+    });
+    return r.issues;
+  }
+
+  const FRAME_HINT = {
+    loop: 'Repeated calls (for/while) go in a loop frame.',
+    alt: 'An if/else with calls in both branches is an alt frame.',
+    opt: 'An if with no else is an opt frame.',
+    par: 'Calls that run in parallel go in a par frame.',
+  };
+
+  function seqToText(d) {
+    const nm = {};
+    (d.lifelines || []).forEach((l) => { nm[l.id] = `${l.kind === 'class' ? '<<class>> ' : ''}${clean(l.name)}${l.kind === 'actor' ? ' (actor)' : ''}`; });
+    nm[START] = '(caller)';
+    const lines = ['lifelines: ' + (d.lifelines || []).map((l) => nm[l.id]).join(', ')];
+    let depth = 0;
+    for (const row of d.rows || []) {
+      if (row.type === 'end' || row.type === 'else') depth = Math.max(0, depth - 1);
+      const pad = '  '.repeat(depth);
+      if (row.type === 'frame') { lines.push(`${pad}${row.frame} [${clean(row.guard)}]`); depth++; }
+      else if (row.type === 'else') { lines.push(`${pad}else [${clean(row.guard)}]`); depth++; }
+      else if (row.type === 'end') lines.push(`${pad}end`);
+      else lines.push(`${pad}${row.type}: ${nm[row.from] || row.from} -> ${nm[row.to] || row.to}${row.label ? ' : ' + clean(row.label) : ''}`);
+    }
+    return lines.join('\n');
+  }
+
   // ---------- entry ----------
 
   function grade(part, diagram) {
-    const d = diagram || { nodes: [], edges: [] };
-    const issues = part.mode === 'object' ? gradeObjectDiagram(part.key, d) : gradeClassDiagram(part.key, d);
+    let issues;
+    if (part.mode === 'sequence') issues = gradeSequenceDiagram(part.key, diagram || { lifelines: [], rows: [] });
+    else {
+      const d = diagram || { nodes: [], edges: [] };
+      issues = part.mode === 'object' ? gradeObjectDiagram(part.key, d) : gradeClassDiagram(part.key, d);
+    }
     return summarize(issues);
   }
 
   /** Plain-text dump of a diagram, for asking Claude or for debugging. */
   function toText(diagram) {
+    if (diagram && diagram.rows) return seqToText(diagram);
     const nodes = (diagram.nodes || []).map(normNode);
     const nm = {};
     nodes.forEach((n) => { nm[n.id] = n.name || '(unnamed)'; });
@@ -591,5 +947,5 @@
     return lines.join('\n');
   }
 
-  return { grade, toText, parseMember, parseHeader, normNode };
+  return { grade, toText, parseMember, parseHeader, normNode, buildSeqTree, parseCall, parseLifeline, START };
 });

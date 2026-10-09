@@ -108,7 +108,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .g-solid { fill: var(--ink); stroke: var(--ink); stroke-width: 1.4; }
 
 .bar { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--rule); background: var(--panel); flex-wrap: wrap; }
-.status { flex: 1; min-width: 180px; color: var(--ink-2); font-size: 13px; }
+.status { flex: 1; min-width: 180px; color: var(--ink-2); font-size: 13px; min-height: 2.9em; }
 .status strong { color: var(--ink); }
 .status.model { color: var(--note); }
 .zoom { display: inline-flex; border: 1px solid var(--rule); border-radius: 6px; overflow: hidden; }
@@ -141,6 +141,27 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .edge.sel .deco.solid { fill: var(--accent); }
 .edge.hl .stroke, .edge.hl .deco { stroke: var(--err); stroke-width: 2.4; }
 .readonly .node, .readonly .edge .hit { cursor: default; }
+.sq-start text { fill: var(--ink-2); font: 11px var(--f-mono); }
+.sq-guide { stroke: var(--rule); stroke-dasharray: 2 4; }
+.sq-insert { stroke: var(--accent); stroke-dasharray: 6 4; stroke-width: 1.5; }
+.sq-line { stroke: var(--ink-2); stroke-dasharray: 6 5; stroke-width: 1.2; }
+.sq-band { fill: transparent; }
+.sq-act { fill: var(--panel); stroke: var(--ink); stroke-width: 1.2; }
+.sq-stick { fill: none; stroke: var(--ink); stroke-width: 1.4; }
+.sq-x { stroke: var(--ink); stroke-width: 2; fill: none; }
+.sq-dot { fill: var(--ink); }
+.hit-r { fill: transparent; cursor: pointer; }
+.sq-msg { cursor: grab; }
+.sq-msg text.ph, .sq-frame text.ph { fill: var(--ink-2); font-style: italic; }
+.sq-life.sel .sq-line { stroke: var(--accent); }
+.fr-box { fill: none; stroke: var(--ink-2); stroke-width: 1.2; }
+.fr-box.open { stroke: var(--err); stroke-dasharray: 4 3; }
+.fr-tagbg { fill: var(--sunk); stroke: var(--ink-2); stroke-width: 1.2; }
+.fr-div { stroke: var(--ink-2); stroke-dasharray: 6 4; }
+.sq-frame text { fill: var(--ink); font-family: var(--f-mono); font-size: 12px; paint-order: stroke; stroke: var(--paper); stroke-width: 3px; stroke-linejoin: round; }
+.fr-tag, .fr-else, .fr-end { cursor: pointer; }
+.sq-frame.sel .fr-box, .sq-frame.sel .fr-tagbg, .fr-else.sel .fr-div { stroke: var(--accent); stroke-width: 2; }
+.sq-frame.hl .fr-box, .fr-else.hl .fr-div { stroke: var(--err); stroke-width: 2.2; }
 .ghost { position: fixed; pointer-events: none; z-index: 20; background: var(--panel); border: 1.5px dashed var(--accent); border-radius: 4px; padding: 6px 12px; font: 12px var(--f-mono); }
 
 /* side panel */
@@ -283,6 +304,7 @@ const S = {
   zoom: 'fit',
 };
 const curPart = () => S.parts[S.cur];
+const emptyFor = (p) => clone(p.starter || (p.mode === 'sequence' ? { lifelines: [], rows: [] } : { nodes: [], edges: [] }));
 const curDiagram = () => (S.view === 'model' ? curPart().p.model : S.diagrams[curPart().key]);
 
 // ---------------- storage ----------------
@@ -334,6 +356,10 @@ const TYPE_LABEL = { association: 'Association', composition: 'Composition', agg
 function renderToolbox() {
   const tb = $('#toolbox');
   const tile = (t, cls) => `<button type="button" class="tile ${cls}" data-tool="${t.id}" aria-pressed="${S.tool && S.tool.id === t.id}"><svg viewBox="0 0 30 20" aria-hidden="true">${GLYPH[t.id]}</svg>${esc(t.label)}</button>`;
+  if (isSeq()) {
+    tb.innerHTML = '<h2>Lifelines</h2>' + SEQ_LIFE_TOOLS.map((t) => tile(t, 'box')).join('') + '<h2>Messages</h2>' + SEQ_MSG_TOOLS.map((t) => tile(t, 'line')).join('') + '<h2>Frames</h2>' + SEQ_FRAME_TOOLS.map((t) => tile(t, 'line')).join('');
+    return;
+  }
   tb.innerHTML = '<h2>Boxes</h2>' + BOX_TOOLS.map((t) => tile(t, 'box')).join('') + '<h2>Lines</h2>' + LINE_TOOLS.map((t) => tile(t, 'line')).join('');
 }
 
@@ -405,6 +431,7 @@ let boxes = {}; // id -> {x,y,w,h}
 function renderCanvas() {
   const P = curPart();
   if (!P) return;
+  if (isSeq()) { renderSeq(); return; }
   const d = curDiagram();
   const ro = S.view === 'model';
   svg.innerHTML = '';
@@ -537,6 +564,7 @@ function svgPoint(evt) {
 let drag = null;
 svg.addEventListener('pointerdown', (evt) => {
   if (S.view === 'model') return;
+  if (isSeq()) { seqPointerDown(evt); return; }
   const d = curDiagram();
   const nodeEl = evt.target.closest('[data-node]');
   const edgeEl = evt.target.closest('[data-edge]');
@@ -568,6 +596,7 @@ svg.addEventListener('pointerdown', (evt) => {
   select(null);
 });
 svg.addEventListener('pointermove', (evt) => {
+  if (isSeq()) { seqPointerMove(evt); return; }
   if (!drag) return;
   const n = curDiagram().nodes.find((x) => x.id === drag.id);
   if (!n) return;
@@ -575,11 +604,13 @@ svg.addEventListener('pointermove', (evt) => {
   const nx = Math.max(0, Math.round((p.x - drag.dx) / 10) * 10), ny = Math.max(0, Math.round((p.y - drag.dy) / 10) * 10);
   if (nx !== n.x || ny !== n.y) { n.x = nx; n.y = ny; drag.moved = true; renderCanvas(); }
 });
-const endDrag = () => { if (drag && drag.moved) save(); drag = null; };
+const endDrag = () => { if (isSeq()) { seqPointerUp(); return; } if (drag && drag.moved) save(); drag = null; };
 svg.addEventListener('pointerup', endDrag);
 svg.addEventListener('pointercancel', endDrag);
 svg.addEventListener('dblclick', () => {
-  if (S.sel && S.sel.kind === 'node') { const f = $('#f-name'); if (f) { f.focus(); f.select(); } }
+  if (!S.sel) return;
+  const f = S.sel.kind === 'node' ? $('#f-name') : S.sel.kind === 'life' ? $('#s-name') : ($('#s-label') || $('#s-guard'));
+  if (f) { f.focus(); if (f.select) f.select(); }
 });
 
 $('#zIn').onclick = () => { S.zoom = Math.min(2, Math.round(((S.zNow || 1) + 0.15) * 100) / 100); renderCanvas(); };
@@ -598,7 +629,7 @@ $('#toolbox').addEventListener('pointerdown', (evt) => {
   tdrag = { id: t.dataset.tool, x: evt.clientX, y: evt.clientY, ghost: null };
 });
 document.addEventListener('pointermove', (evt) => {
-  if (!tdrag || !BOX_TOOLS.some((b) => b.id === tdrag.id)) return;
+  if (!tdrag || isSeq() || !BOX_TOOLS.some((b) => b.id === tdrag.id)) return;
   if (!tdrag.ghost && Math.hypot(evt.clientX - tdrag.x, evt.clientY - tdrag.y) > 6) {
     tdrag.ghost = document.createElement('div');
     tdrag.ghost.className = 'ghost';
@@ -629,8 +660,10 @@ $('#toolbox').addEventListener('click', (evt) => {
 });
 function pickTool(id) {
   if (S.view === 'model') showMine();
-  if (BOX_TOOLS.some((b) => b.id === id)) { addBox(id); return; }
-  const t = LINE_TOOLS.find((l) => l.id === id);
+  if (isSeq() && SEQ_LIFE_TOOLS.some((b) => b.id === id)) { addLifeline(id); return; }
+  if (!isSeq() && BOX_TOOLS.some((b) => b.id === id)) { addBox(id); return; }
+  const t = (isSeq() ? SEQ_ALL_TOOLS : LINE_TOOLS).find((l) => l.id === id);
+  if (!t) return;
   if (S.tool && S.tool.id === id) { cancelTool(); return; }
   S.tool = t; S.pending = null;
   renderToolbox(); renderStatus(); renderCanvas();
@@ -671,10 +704,502 @@ document.addEventListener('keydown', (evt) => {
 function deleteSel() {
   const d = curDiagram();
   if (!S.sel) return;
+  if (isSeq()) { seqDelete(); return; }
   if (S.sel.kind === 'node') { d.nodes = d.nodes.filter((n) => n.id !== S.sel.id); d.edges = d.edges.filter((e) => e.from !== S.sel.id && e.to !== S.sel.id); }
   else d.edges = d.edges.filter((e) => e.id !== S.sel.id);
   S.diagrams[curPart().key] = d;
   select(null); save();
+}
+
+// ================= sequence diagrams =================
+const isSeq = () => !!curPart() && curPart().p.mode === 'sequence';
+const SEQ_LIFE_TOOLS = [
+  { id: 'lifeline', label: 'Object lifeline', life: { kind: 'object', name: ':NewClass' } },
+  { id: 'classlife', label: 'Class lifeline', life: { kind: 'class', name: 'NewClass' } },
+  { id: 'actor', label: 'Actor', life: { kind: 'actor', name: 'User' } },
+];
+const SEQ_MSG_TOOLS = [
+  { id: 'call', label: 'Call', type: 'call', hint: 'click the caller at the height you want (far left = start, for the first call), then the callee. Same lifeline twice = self-call.' },
+  { id: 'return', label: 'Return', type: 'return', hint: 'click the lifeline that returns, then the one it returns to.' },
+  { id: 'create', label: 'Create', type: 'create', hint: 'click the creator, then the new object. Its box moves down to this point.' },
+  { id: 'delete', label: 'Delete (X)', type: 'delete', hint: 'click the lifeline that deletes, then the object whose life ends.' },
+];
+const SEQ_FRAME_TOOLS = [
+  { id: 'fr-loop', label: 'loop', frame: 'loop', hint: 'click where the frame starts, then where it ends.' },
+  { id: 'fr-alt', label: 'alt', frame: 'alt', hint: 'click where the frame starts, then where it ends. Add an Else divider for the second part.' },
+  { id: 'fr-opt', label: 'opt', frame: 'opt', hint: 'click where the frame starts, then where it ends.' },
+  { id: 'fr-par', label: 'par', frame: 'par', hint: 'click where the frame starts, then where it ends.' },
+  { id: 'fr-else', label: 'Else divider', frame: 'else', hint: 'click inside an alt or par frame where the next part starts.' },
+];
+const SEQ_ALL_TOOLS = SEQ_MSG_TOOLS.concat(SEQ_FRAME_TOOLS);
+Object.assign(GLYPH, {
+  lifeline: '<rect class="g-fill" x="7" y="1" width="16" height="7" rx="1"/><path class="g-ink" d="M15 8v11" stroke-dasharray="2 2"/>',
+  classlife: '<rect class="g-fill" x="5" y="1" width="20" height="7" rx="1"/><text x="15" y="6.6" font-size="5" text-anchor="middle" fill="currentColor" font-family="monospace">«c»</text><path class="g-ink" d="M15 8v11" stroke-dasharray="2 2"/>',
+  actor: '<circle class="g-ink" cx="15" cy="4" r="2.6"/><path class="g-ink" d="M15 6.6v6.4M10 9h10M15 13l-4 6M15 13l4 6"/>',
+  call: '<path class="g-ink" d="M2 10h20"/><path class="g-solid" d="M21 6l7 4-7 4z"/>',
+  return: '<path class="g-ink" d="M4 10h24" stroke-dasharray="3 2"/><path class="g-ink" d="M9 6l-6 4 6 4"/>',
+  create: '<path class="g-ink" d="M2 10h11"/><path class="g-solid" d="M12 7l5 3-5 3z"/><rect class="g-fill" x="17" y="5" width="11" height="10" rx="1"/>',
+  delete: '<path class="g-ink" d="M15 1v8" stroke-dasharray="2 2"/><path class="g-ink" d="M10 9l10 10M20 9l-10 10"/>',
+  'fr-loop': '<rect class="g-ink" x="2" y="2" width="26" height="16"/><path class="g-fill" d="M2 2h12v4l-2 3H2z"/><text x="7.5" y="7.6" font-size="5.2" text-anchor="middle" fill="currentColor" font-family="monospace">lp</text>',
+  'fr-alt': '<rect class="g-ink" x="2" y="2" width="26" height="16"/><path class="g-fill" d="M2 2h12v4l-2 3H2z"/><path class="g-ink" d="M2 12h26" stroke-dasharray="2 2"/>',
+  'fr-opt': '<rect class="g-ink" x="2" y="2" width="26" height="16"/><path class="g-fill" d="M2 2h12v4l-2 3H2z"/><text x="7.5" y="7.6" font-size="5.2" text-anchor="middle" fill="currentColor" font-family="monospace">opt</text>',
+  'fr-par': '<rect class="g-ink" x="2" y="2" width="26" height="16"/><path class="g-fill" d="M2 2h12v4l-2 3H2z"/><path class="g-ink" d="M2 12h26M8 15h14"/>',
+  'fr-else': '<path class="g-ink" d="M2 10h26" stroke-dasharray="3 2"/><text x="15" y="18" font-size="5.5" text-anchor="middle" fill="currentColor" font-family="monospace">[else]</text>',
+});
+
+const SQ = { TOP: 16, HEAD: 34, ROW: 40, START_X: 36 };
+SQ.FIRST = SQ.TOP + SQ.HEAD + 40;
+const sqRowY = (i) => SQ.FIRST + i * SQ.ROW;
+let G = null; // last sequence layout, used for hit testing
+
+function lifeLabel(l) { return String(l.name || '').trim() || '(no name)'; }
+function seqLayout(d) {
+  const xs = {}, ws = {};
+  let prevX = null, prevW = 0;
+  for (const l of d.lifelines) {
+    const w = l.kind === 'actor' ? Math.max(56, tw(lifeLabel(l), 12.5, true) + 12) : Math.max(92, tw(lifeLabel(l), 12.5, true) + 26);
+    const x = prevX === null ? 150 + Math.max(0, (w - 92) / 2) : prevX + Math.max(150, (prevW + w) / 2 + 48);
+    xs[l.id] = x; ws[l.id] = w; prevX = x; prevW = w;
+  }
+  xs['@start'] = SQ.START_X;
+  const tree = UMLGrader.buildSeqTree(d);
+  const createdAt = {}, deletedAt = {};
+  d.rows.forEach((r, i) => {
+    if (r.type === 'create' && createdAt[r.to] === undefined) createdAt[r.to] = i;
+    if (r.type === 'delete' && deletedAt[r.to] === undefined) deletedAt[r.to] = i;
+  });
+  const bottom = sqRowY(Math.max(d.rows.length, 2)) + 16;
+  const right = (prevX || 150) + prevW / 2 + 120;
+  return { xs, ws, tree, createdAt, deletedAt, bottom, right };
+}
+function barX(who, depth) { return G.xs[who] + depth * 7; }
+function senderAct(who, k) {
+  let best = null;
+  for (const a of G.tree.acts) if (a.who === who && a.start < k && a.end >= k && (!best || a.depth > best.depth)) best = a;
+  return best;
+}
+function receiverAct(who, k) {
+  let best = null;
+  for (const a of G.tree.acts) if (a.who === who && a.start < k && a.end > k && (!best || a.depth > best.depth)) best = a;
+  return best;
+}
+const edgeX = (who, act, towardX) => {
+  if (who === '@start') return SQ.START_X;
+  if (!act) return G.xs[who];
+  const c = barX(who, act.depth);
+  return towardX >= c ? c + 5 : c - 5;
+};
+
+function renderSeq() {
+  const P = curPart();
+  const d = curDiagram();
+  const ro = S.view === 'model';
+  svg.innerHTML = '';
+  svg.classList.toggle('readonly', ro);
+  G = seqLayout(d);
+  const cw = Math.max(720, G.right);
+  const ch = Math.max(420, G.bottom + 40);
+  svg.setAttribute('viewBox', `0 0 ${cw} ${ch}`);
+  const wrapW = $('#canvasWrap').clientWidth || cw;
+  const z = S.zoom === 'fit' ? Math.min(1, Math.max(0.35, (wrapW - 4) / cw)) : S.zoom;
+  S.zNow = z;
+  svg.setAttribute('width', Math.round(cw * z));
+  svg.setAttribute('height', Math.round(ch * z));
+
+  const defs = el('defs', {}, svg);
+  const pat = el('pattern', { id: 'gridpat', width: 20, height: 20, patternUnits: 'userSpaceOnUse' }, defs);
+  el('rect', { width: 20, height: 20, class: 'page' }, pat);
+  el('path', { d: 'M20 0H0V20', class: 'gridline' }, pat);
+  el('rect', { x: 0, y: 0, width: cw, height: ch, class: 'bg' }, svg);
+
+  // start guide (where incoming calls begin)
+  const gS = el('g', { class: 'sq-start' }, svg);
+  el('line', { x1: SQ.START_X, x2: SQ.START_X, y1: SQ.FIRST - 26, y2: G.bottom, class: 'sq-guide' }, gS);
+  text(gS, SQ.START_X, SQ.FIRST - 32, 'start', { anchor: 'middle', cls: 'small' });
+
+  // frames: boxes behind everything, labels on top (added to gTop at the end)
+  const gF = el('g', {}, svg);
+  const gTop = el('g', {});
+  for (const f of G.tree.frames) drawFrame(gF, d, f, gTop);
+
+  // lifelines
+  const gL = el('g', {}, svg);
+  for (const l of d.lifelines) drawLifeline(gL, l);
+
+  // activation bars
+  const gA = el('g', {}, svg);
+  for (const a of G.tree.acts) {
+    if (!d.lifelines.some((l) => l.id === a.who)) continue;
+    const row = d.rows[a.start];
+    let y1 = sqRowY(a.start);
+    if (row && row.type === 'call' && row.from === row.to) y1 += 12;
+    if (row && row.type === 'create') y1 += SQ.HEAD / 2;
+    let y2 = sqRowY(a.end);
+    if (y2 < y1 + 14) y2 = y1 + 14;
+    el('rect', { class: 'sq-act', x: barX(a.who, a.depth) - 5, y: y1, width: 10, height: y2 - y1 }, gA);
+  }
+
+  // insertion guide while a tool is waiting for its second click
+  if (S.tool && S.pending && S.pending.y !== undefined) {
+    const gy = insertGuideY(insertIndex(S.pending.y));
+    el('line', { x1: 0, x2: cw, y1: gy, y2: gy, class: 'sq-insert' }, svg);
+  }
+
+  // messages
+  const gM = el('g', {}, svg);
+  d.rows.forEach((row, k) => { if (['call', 'return', 'create', 'delete'].includes(row.type)) drawMessage(gM, d, row, k); });
+  svg.appendChild(gTop);
+}
+
+function insertIndex(y) {
+  const n = curDiagram().rows.length;
+  if (y < SQ.FIRST - SQ.ROW / 2) return 0;
+  return Math.max(0, Math.min(n, Math.floor((y - SQ.FIRST) / SQ.ROW) + 1));
+}
+function insertGuideY(idx) { return idx === 0 ? SQ.FIRST - SQ.ROW / 2 : sqRowY(idx - 1) + SQ.ROW / 2; }
+
+function drawLifeline(parent, l) {
+  const cls = ['node', 'sq-life'];
+  if (S.view === 'mine' && S.sel && S.sel.kind === 'life' && S.sel.id === l.id) cls.push('sel');
+  if (S.pending && S.pending.from === l.id) cls.push('pending');
+  if (S.hl && S.hl.lifeline === l.id) cls.push('hl');
+  const g = el('g', { class: cls.join(' '), 'data-life': l.id }, parent);
+  const x = G.xs[l.id], w = G.ws[l.id];
+  const created = G.createdAt[l.id];
+  const top = created !== undefined ? sqRowY(created) - SQ.HEAD / 2 : SQ.TOP;
+  const endY = G.deletedAt[l.id] !== undefined ? sqRowY(G.deletedAt[l.id]) : G.bottom;
+  el('line', { class: 'sq-line', x1: x, x2: x, y1: top + SQ.HEAD, y2: endY }, g);
+  el('rect', { class: 'sq-band', x: x - 34, y: top, width: 68, height: endY - top }, g);
+  if (l.kind === 'actor') {
+    el('circle', { class: 'sq-stick', cx: x, cy: top + 5, r: 4.5 }, g);
+    el('path', { class: 'sq-stick', d: `M${x} ${top + 9.5}v9M${x - 7} ${top + 13}h14M${x} ${top + 18.5}l-6 7M${x} ${top + 18.5}l6 7` }, g);
+    text(g, x, top + SQ.HEAD + 6, lifeLabel(l), { anchor: 'middle', bold: true });
+    return;
+  }
+  el('rect', { class: 'box', x: x - w / 2, y: top, width: w, height: SQ.HEAD, rx: 1.5 }, g);
+  if (l.kind === 'class') {
+    text(g, x, top + 13, '«class»', { anchor: 'middle', cls: 'small' });
+    text(g, x, top + 27, lifeLabel(l), { anchor: 'middle', bold: true });
+  } else text(g, x, top + 21.5, lifeLabel(l), { anchor: 'middle', bold: true, cls: l.name ? null : 'ph' });
+  if (G.deletedAt[l.id] !== undefined) {
+    const y = endY;
+    el('path', { class: 'sq-x', d: `M${x - 8} ${y - 8}l16 16M${x + 8} ${y - 8}l-16 16` }, g);
+  }
+}
+
+function drawMessage(parent, d, row, k) {
+  const y = sqRowY(k);
+  const cls = ['edge', 'sq-msg'];
+  if (S.view === 'mine' && S.sel && S.sel.kind === 'row' && S.sel.id === row.id) cls.push('sel');
+  if (S.hl && S.hl.row === row.id) cls.push('hl');
+  const g = el('g', { class: cls.join(' '), 'data-row': row.id }, parent);
+  const known = (id) => id === '@start' || G.xs[id] !== undefined;
+  if (!known(row.from) || !known(row.to)) return;
+  const label = String(row.label || '').trim();
+  const ownAct = G.tree.acts.find((a) => a.row === row.id);
+
+  if (row.type === 'call' && row.from === row.to) {
+    const sAct = senderAct(row.from, k);
+    const sx = sAct ? barX(row.from, sAct.depth) + 5 : G.xs[row.from];
+    const tx = ownAct ? barX(row.to, ownAct.depth) + 5 : G.xs[row.to];
+    el('path', { class: 'stroke', d: `M${sx} ${y}H${sx + 34}V${y + 14}H${tx + 2}` }, g);
+    el('polygon', { class: 'deco solid', points: pts([{ x: tx, y: y + 14 }, { x: tx + 9, y: y + 10 }, { x: tx + 9, y: y + 18 }]) }, g);
+    el('rect', { class: 'hit-r', x: sx - 4, y: y - 14, width: 46 + tw(label || ' ', 12), height: 34 }, g);
+    if (label) text(g, sx + 40, y + 3, label, { anchor: 'start' });
+    return;
+  }
+
+  if (row.type === 'return' && row.from === row.to) {
+    // return from a self-call: small loop from the inner bar back to the outer one
+    const inner = G.tree.acts.find((a) => a.who === row.from && a.end === k);
+    const outer = receiverAct(row.to, k);
+    const sx = inner ? barX(row.from, inner.depth) + 5 : G.xs[row.from];
+    const tx = outer ? barX(row.to, outer.depth) + 5 : G.xs[row.to];
+    el('path', { class: 'stroke dash', d: `M${sx} ${y - 8}H${sx + 30}V${y + 6}H${tx + 2}` }, g);
+    el('polyline', { class: 'deco open', points: pts([{ x: tx + 9, y: y + 1 }, { x: tx, y: y + 6 }, { x: tx + 9, y: y + 11 }]) }, g);
+    el('rect', { class: 'hit-r', x: tx - 2, y: y - 16, width: 44 + tw(label || ' ', 12), height: 30 }, g);
+    if (label) text(g, sx + 36, y + 3, label, { anchor: 'start' });
+    return;
+  }
+  const fromX0 = G.xs[row.from], toX0 = G.xs[row.to];
+  let sx, tx;
+  if (row.type === 'return') {
+    const sAct = G.tree.acts.find((a) => a.who === row.from && a.end === k);
+    sx = edgeX(row.from, sAct, toX0);
+    tx = edgeX(row.to, receiverAct(row.to, k), fromX0);
+  } else {
+    sx = edgeX(row.from, senderAct(row.from, k), toX0);
+    if (row.type === 'create') { const w = G.ws[row.to] || 92; tx = toX0 >= sx ? toX0 - w / 2 : toX0 + w / 2; }
+    else if (row.type === 'delete') tx = toX0;
+    else tx = edgeX(row.to, ownAct, fromX0);
+  }
+  const dir = Math.sign(tx - sx) || 1;
+  const dashed = row.type === 'return';
+  const tipBack = row.type === 'return' ? 0 : 9;
+  el('line', { class: 'stroke' + (dashed ? ' dash' : ''), x1: sx, y1: y, x2: tx - dir * tipBack, y2: y }, g);
+  if (row.type === 'return') el('polyline', { class: 'deco open', points: pts([{ x: tx - dir * 9, y: y - 5 }, { x: tx, y }, { x: tx - dir * 9, y: y + 5 }]) }, g);
+  else el('polygon', { class: 'deco solid', points: pts([{ x: tx, y }, { x: tx - dir * 10, y: y - 5 }, { x: tx - dir * 10, y: y + 5 }]) }, g);
+  if (row.from === '@start') el('circle', { class: 'sq-dot', cx: SQ.START_X, cy: y, r: 4 }, g);
+  el('rect', { class: 'hit-r', x: Math.min(sx, tx) - 2, y: y - 16, width: Math.abs(tx - sx) + 4, height: 24 }, g);
+  const shown = label || (row.type === 'create' ? '' : row.type === 'call' ? '(method?)' : '');
+  if (shown) text(g, (sx + tx) / 2, y - 6, shown, { anchor: 'middle', cls: label ? null : 'ph' });
+}
+
+function frameRows(d, f) {
+  const rows = d.rows;
+  const end = Number.isInteger(f.end) ? rows[f.end] : null;
+  return { start: rows[f.start], end };
+}
+function drawFrame(parent, d, f, top) {
+  const inner = d.rows.slice(f.start + 1, Math.ceil(f.end)).filter((r) => r.from || r.to);
+  const ids = new Set();
+  inner.forEach((r) => { [r.from, r.to].forEach((id) => { if (id && id !== '@start' && G.xs[id] !== undefined) ids.add(id); }); });
+  const xsIn = [...ids].map((id) => G.xs[id]);
+  const all = d.lifelines.map((l) => G.xs[l.id]);
+  const pad = 62 - f.depth * 12;
+  let x1 = (xsIn.length ? Math.min(...xsIn) : (all.length ? Math.min(...all) : 120)) - pad;
+  let x2 = (xsIn.length ? Math.max(...xsIn) : (all.length ? Math.min(...all) + 160 : 300)) + pad + 30;
+  if (x2 - x1 < 180) x2 = x1 + 180;
+  const y1 = sqRowY(f.start) - 12;
+  const y2 = Number.isInteger(f.end) ? sqRowY(f.end) - 4 : sqRowY(f.end) + 10;
+  const { start, end } = frameRows(d, f);
+  const isSel = (id) => S.view === 'mine' && S.sel && S.sel.kind === 'row' && S.sel.id === id;
+  const isHl = (id) => S.hl && S.hl.row === id;
+  const g = el('g', { class: 'sq-frame' + (isSel(f.row) ? ' sel' : '') + (isHl(f.row) ? ' hl' : '') }, parent);
+  el('rect', { class: 'fr-box' + (Number.isInteger(f.end) ? '' : ' open'), x: x1, y: y1, width: x2 - x1, height: y2 - y1 }, g);
+  const tagW = tw(f.frame, 12, true) + 18;
+  const gl = el('g', { class: 'sq-frame' + (isSel(f.row) ? ' sel' : '') + (isHl(f.row) ? ' hl' : '') }, top);
+  const tag = el('g', { 'data-row': f.row, class: 'fr-tag' }, gl);
+  el('path', { class: 'fr-tagbg', d: `M${x1} ${y1}h${tagW}v12l-7 7H${x1}z` }, tag);
+  text(tag, x1 + 7, y1 + 14, f.frame, { bold: true });
+  const guard = f.guard ? (f.guard.startsWith('[') ? f.guard : `[${f.guard}]`) : '[guard?]';
+  text(tag, x1 + tagW + 8, y1 + 14, guard, { cls: f.guard ? null : 'ph' });
+  el('rect', { class: 'hit-r', x: x1, y: y1, width: tagW + 16 + tw(guard, 12), height: 20 }, tag);
+  for (const e of f.elses) {
+    const ey = sqRowY(e.at) - 6;
+    const ge = el('g', { 'data-row': e.row, class: 'fr-else' + (isSel(e.row) ? ' sel' : '') + (isHl(e.row) ? ' hl' : '') }, gl);
+    el('line', { class: 'fr-div', x1, x2, y1: ey, y2: ey }, ge);
+    const eg = e.guard ? (e.guard.startsWith('[') ? e.guard : `[${e.guard}]`) : '[guard?]';
+    text(ge, x1 + 8, ey + 16, eg, { cls: e.guard ? null : 'ph' });
+    el('rect', { class: 'hit-r', x: x1, y: ey - 7, width: x2 - x1, height: 26 }, ge);
+  }
+  if (end) {
+    const gb = el('g', { 'data-row': end.id, class: 'fr-end' + (isSel(end.id) ? ' sel' : '') }, g);
+    el('rect', { class: 'hit-r', x: x1, y: y2 - 6, width: x2 - x1, height: 12 }, gb);
+  }
+}
+
+// ---- sequence interaction ----
+function lifeAtX(x) {
+  if (x < SQ.START_X + 44) return '@start';
+  let best = null, bd = Infinity;
+  for (const l of curDiagram().lifelines) { const dd = Math.abs(G.xs[l.id] - x); if (dd < bd) { bd = dd; best = l.id; } }
+  return bd <= 75 ? best : null;
+}
+let sdrag = null;
+function seqPointerDown(evt) {
+  const d = curDiagram();
+  const p = svgPoint(evt);
+  if (S.tool) {
+    const t = S.tool;
+    if (t.frame) {
+      if (t.frame === 'else') {
+        const at = insertIndex(p.y);
+        const row = { id: uid('r'), type: 'else', guard: 'else' };
+        d.rows.splice(at, 0, row);
+        finishSeqTool(row);
+        return;
+      }
+      if (!S.pending) { S.pending = { y: p.y }; renderStatus(); renderCanvas(); return; }
+      let a = insertIndex(S.pending.y), b = insertIndex(p.y);
+      if (b < a) [a, b] = [b, a];
+      const start = { id: uid('r'), type: 'frame', frame: t.frame, guard: '' };
+      const end = { id: uid('r'), type: 'end' };
+      d.rows.splice(b, 0, end);
+      d.rows.splice(a, 0, start);
+      finishSeqTool(start);
+      return;
+    }
+    const who = lifeAtX(p.x);
+    if (!who) return;
+    if (!S.pending) {
+      if (who === '@start' && t.type !== 'call') { toast('Only an incoming call starts at the start dot.'); return; }
+      S.pending = { from: who, y: p.y }; renderStatus(); renderCanvas(); return;
+    }
+    let to = who;
+    if (to === '@start' && t.type !== 'return') { toast('Pick a lifeline as the target.'); return; }
+    if (to === S.pending.from && (t.type === 'create' || t.type === 'delete')) { toast('Pick a different lifeline as the target.'); return; }
+    const row = { id: uid('r'), type: t.type, from: S.pending.from, to, label: '' };
+    d.rows.splice(insertIndex(S.pending.y), 0, row);
+    finishSeqTool(row);
+    return;
+  }
+  const rowEl = evt.target.closest('[data-row]');
+  const lifeEl = evt.target.closest('[data-life]');
+  if (rowEl) {
+    const id = rowEl.dataset.row;
+    sdrag = { kind: 'row', id, moved: false };
+    svg.setPointerCapture(evt.pointerId);
+    if (!(S.sel && S.sel.id === id)) select({ kind: 'row', id });
+    return;
+  }
+  if (lifeEl) {
+    const id = lifeEl.dataset.life;
+    sdrag = { kind: 'life', id, moved: false };
+    svg.setPointerCapture(evt.pointerId);
+    if (!(S.sel && S.sel.id === id)) select({ kind: 'life', id });
+    return;
+  }
+  select(null);
+}
+function seqPointerMove(evt) {
+  if (!sdrag) return;
+  const d = curDiagram();
+  const p = svgPoint(evt);
+  if (sdrag.kind === 'row') {
+    const i = d.rows.findIndex((r) => r.id === sdrag.id);
+    const j = Math.max(0, Math.min(d.rows.length - 1, Math.round((p.y - SQ.FIRST) / SQ.ROW)));
+    if (i >= 0 && j !== i) { const [r] = d.rows.splice(i, 1); d.rows.splice(j, 0, r); sdrag.moved = true; renderCanvas(); }
+  } else {
+    const i = d.lifelines.findIndex((l) => l.id === sdrag.id);
+    let j = 0;
+    d.lifelines.forEach((l, idx) => { if (idx !== i && G.xs[l.id] < p.x) j++; });
+    if (i >= 0 && j !== i) { const [l] = d.lifelines.splice(i, 1); d.lifelines.splice(j, 0, l); sdrag.moved = true; renderCanvas(); }
+  }
+}
+function seqPointerUp() { if (sdrag && sdrag.moved) save(); sdrag = null; }
+function finishSeqTool(row) {
+  S.tool = null; S.pending = null;
+  renderToolbox(); renderStatus();
+  select({ kind: 'row', id: row.id });
+  save();
+  requestAnimationFrame(() => { const f = $('#s-label') || $('#s-guard'); if (f) f.focus(); });
+}
+function addLifeline(toolId) {
+  if (S.view === 'model') showMine();
+  const t = SEQ_LIFE_TOOLS.find((x) => x.id === toolId);
+  const l = Object.assign({ id: uid('l') }, clone(t.life));
+  curDiagram().lifelines.push(l);
+  S.tool = null; S.pending = null;
+  renderToolbox();
+  select({ kind: 'life', id: l.id });
+  save();
+  requestAnimationFrame(() => { const f = $('#s-name'); if (f) { f.focus(); f.select(); } });
+}
+function matchFrame(rows, i) {
+  // indexes of the frame start, its else rows and end, given any one of them
+  let s = i;
+  if (rows[i].type !== 'frame') {
+    let depth = 0;
+    for (s = i - 1; s >= 0; s--) {
+      if (rows[s].type === 'end') depth++;
+      else if (rows[s].type === 'frame') { if (depth === 0) break; depth--; }
+    }
+    if (s < 0) return { idx: [i] };
+  }
+  const idx = [s];
+  let depth = 0;
+  for (let j = s + 1; j < rows.length; j++) {
+    const t = rows[j].type;
+    if (t === 'frame') depth++;
+    else if (t === 'end') { if (depth === 0) { idx.push(j); break; } depth--; }
+    else if (t === 'else' && depth === 0) idx.push(j);
+  }
+  return { idx };
+}
+function seqDelete() {
+  const d = curDiagram();
+  if (S.sel.kind === 'life') {
+    d.lifelines = d.lifelines.filter((l) => l.id !== S.sel.id);
+    d.rows = d.rows.filter((r) => r.from !== S.sel.id && r.to !== S.sel.id);
+  } else {
+    const i = d.rows.findIndex((r) => r.id === S.sel.id);
+    if (i < 0) return;
+    if (['frame', 'end'].includes(d.rows[i].type)) {
+      const kill = new Set(matchFrame(d.rows, i).idx.map((j) => d.rows[j].id));
+      d.rows = d.rows.filter((r) => !kill.has(r.id));
+    } else d.rows.splice(i, 1);
+  }
+  select(null); save();
+}
+function moveRow(id, delta) {
+  const d = curDiagram();
+  const i = d.rows.findIndex((r) => r.id === id);
+  const j = i + delta;
+  if (i < 0 || j < 0 || j >= d.rows.length) return;
+  const [r] = d.rows.splice(i, 1); d.rows.splice(j, 0, r);
+  renderCanvas(); save();
+}
+function moveLife(id, delta) {
+  const d = curDiagram();
+  const i = d.lifelines.findIndex((l) => l.id === id);
+  const j = i + delta;
+  if (i < 0 || j < 0 || j >= d.lifelines.length) return;
+  const [l] = d.lifelines.splice(i, 1); d.lifelines.splice(j, 0, l);
+  renderCanvas(); save();
+}
+
+function renderSeqInspector(box) {
+  const d = curDiagram();
+  if (S.sel.kind === 'life') {
+    const l = d.lifelines.find((x) => x.id === S.sel.id);
+    if (!l) { S.sel = null; box.innerHTML = helpHTML('sequence'); return; }
+    box.innerHTML = `
+      <h3>Lifeline</h3>
+      <label class="field"><span>${l.kind === 'class' ? 'Class name (static calls)' : l.kind === 'actor' ? 'Actor name' : 'Name (:Class or name:Class)'}</span><input id="s-name" class="mono" value="${esc(l.name)}" autocomplete="off" spellcheck="false"></label>
+      <label class="field"><span>Kind</span><select id="s-kind"><option value="object">Object  (:Class)</option><option value="class">Class  «class» (for static methods)</option><option value="actor">Actor</option></select></label>
+      <div class="actions" style="margin-bottom:12px"><button class="btn small" id="s-left" type="button">← Move left</button><button class="btn small" id="s-right" type="button">Move right →</button></div>
+      <p class="muted" style="font-size:13px">Drag the box sideways to reorder. A lifeline drops to the point where a Create message makes it.</p>
+      <div class="actions"><button class="btn danger" id="s-del" type="button">Delete lifeline and its messages</button></div>`;
+    $('#s-kind').value = l.kind;
+    $('#s-name').oninput = (e) => { l.name = e.target.value; renderCanvas(); save(); };
+    $('#s-kind').onchange = (e) => {
+      l.kind = e.target.value;
+      if (l.kind === 'class') l.name = l.name.replace(/^[^:]*:/, '');
+      if (l.kind === 'object' && !l.name.includes(':')) l.name = ':' + l.name;
+      renderCanvas(); renderInspector(); save();
+    };
+    $('#s-left').onclick = () => moveLife(l.id, -1);
+    $('#s-right').onclick = () => moveLife(l.id, 1);
+    $('#s-del').onclick = seqDelete;
+    return;
+  }
+  const row = d.rows.find((r) => r.id === S.sel.id);
+  if (!row) { S.sel = null; box.innerHTML = helpHTML('sequence'); return; }
+  const moveBtns = `<div class="actions" style="margin-bottom:12px"><button class="btn small" id="s-up" type="button">↑ Move up</button><button class="btn small" id="s-down" type="button">↓ Move down</button></div>`;
+  if (['frame', 'else', 'end'].includes(row.type)) {
+    const head = row.type === 'frame' ? 'Frame' : row.type === 'else' ? 'Else divider' : 'Frame end';
+    box.innerHTML = `
+      <h3>${head}</h3>
+      ${row.type === 'frame' ? `<label class="field"><span>Kind</span><select id="s-frame"><option value="loop">loop (for / while)</option><option value="alt">alt (if / else)</option><option value="opt">opt (if, no else)</option><option value="par">par (parallel)</option></select></label>` : ''}
+      ${row.type !== 'end' ? `<label class="field"><span>Guard condition</span><input id="s-guard" class="mono" value="${esc(row.guard)}" placeholder="${row.type === 'else' ? 'else' : 'for each item'}" autocomplete="off"></label>` : '<p class="muted">Marks where the frame closes. Drag it, or use the buttons, to change what the frame wraps.</p>'}
+      ${moveBtns}
+      <div class="actions"><button class="btn danger" id="s-del" type="button">${row.type === 'else' ? 'Delete divider' : 'Delete frame'}</button></div>`;
+    if (row.type === 'frame') { $('#s-frame').value = row.frame; $('#s-frame').onchange = (e) => { row.frame = e.target.value; renderCanvas(); save(); }; }
+    if ($('#s-guard')) $('#s-guard').oninput = (e) => { row.guard = e.target.value; renderCanvas(); save(); };
+  } else {
+    const opts = (sel, allowStart) => (allowStart ? `<option value="@start"${sel === '@start' ? ' selected' : ''}>start (outside caller)</option>` : '') +
+      d.lifelines.map((l) => `<option value="${esc(l.id)}"${l.id === sel ? ' selected' : ''}>${esc(lifeLabel(l))}</option>`).join('');
+    const ph = { call: 'method(args)', return: 'value (leave blank for void)', create: 'Class(args)', delete: '' }[row.type];
+    box.innerHTML = `
+      <h3>Message</h3>
+      <label class="field"><span>Kind</span><select id="s-type"><option value="call">Call</option><option value="return">Return</option><option value="create">Create</option><option value="delete">Delete (X)</option></select></label>
+      <div class="row2">
+        <label class="field"><span>From</span><select id="s-from">${opts(row.from, row.type === 'call')}</select></label>
+        <label class="field"><span>To</span><select id="s-to">${opts(row.to, row.type === 'return')}</select></label>
+      </div>
+      ${row.type !== 'delete' ? `<label class="field"><span>Label</span><input id="s-label" class="mono" value="${esc(row.label)}" placeholder="${esc(ph)}" autocomplete="off" spellcheck="false"></label>` : ''}
+      ${moveBtns}
+      <div class="actions"><button class="btn danger" id="s-del" type="button">Delete message</button></div>`;
+    $('#s-type').value = row.type;
+    $('#s-type').onchange = (e) => { row.type = e.target.value; renderCanvas(); renderInspector(); save(); };
+    $('#s-from').onchange = (e) => { row.from = e.target.value; renderCanvas(); save(); };
+    $('#s-to').onchange = (e) => { row.to = e.target.value; renderCanvas(); save(); };
+    if ($('#s-label')) $('#s-label').oninput = (e) => { row.label = e.target.value; renderCanvas(); save(); };
+  }
+  $('#s-up').onclick = () => moveRow(row.id, -1);
+  $('#s-down').onclick = () => moveRow(row.id, 1);
+  $('#s-del').onclick = seqDelete;
 }
 
 // ---------------- status ----------------
@@ -684,10 +1209,12 @@ function renderStatus() {
   if (S.view === 'model') { st.innerHTML = '<strong>Model answer.</strong> One accepted version. Other versions can also be correct. <button class="btn small" id="backMine" type="button">Back to my diagram</button>'; $('#backMine').onclick = showMine; return; }
   if (S.tool) {
     const first = !S.pending;
-    st.innerHTML = `<strong>${esc(S.tool.label)}:</strong> ${first ? esc(S.tool.hint) : 'now click the second box.'} <span class="muted">Esc to cancel.</span>`;
+    const second = S.tool.frame ? 'now click where the frame ends.' : isSeq() ? 'now click the receiving lifeline.' : 'now click the second box.';
+    st.innerHTML = `<strong>${esc(S.tool.label)}:</strong> ${first ? esc(S.tool.hint) : second} <span class="muted">Esc to cancel.</span>`;
     return;
   }
   const P = curPart();
+  if (isSeq()) { st.textContent = 'Add lifelines, then messages top to bottom. Activation bars are drawn for you from the calls and returns. Drag a message up or down to reorder.'; return; }
   st.textContent = P.p.mode === 'object'
     ? 'Drag an Object box from the toolbox, name it name:Class, then join objects with Object link.'
     : 'Click a box to edit it on the right. Drag boxes to move them. Pick a line, then click two boxes.';
@@ -708,6 +1235,7 @@ function renderInspector() {
   const d = curDiagram();
   const P = curPart();
   if (!S.sel || S.view === 'model') { box.innerHTML = helpHTML(P.p.mode); return; }
+  if (isSeq()) { renderSeqInspector(box); return; }
   if (S.sel.kind === 'node') {
     const n = nodeById(S.sel.id);
     if (!n) { S.sel = null; box.innerHTML = helpHTML(P.p.mode); return; }
@@ -779,10 +1307,19 @@ function cheatHTML(kind) {
     class: [['-name: String', 'private attribute'], ['#title: String', 'protected'], ['+getCount(): int', 'method with return type'], ['+add(s: Item)', 'void return can be left out'], ['+print() {abstract}', 'abstract method'], ['-count: int {static}', 'static (shown underlined)']],
     enum: [['GOOD', 'one value per line'], ['OK', ''], ['POOR', '']],
     object: [['name = "spanner"', 'attribute with its value'], ['rating = POOR', 'enum value']],
+    sequence: [[':Logic', 'object lifeline'], ['p:Person', 'named object'], ['find(title)', 'call label'], ['b', 'return value (optional)'], ['Loan(b, m)', 'create label']],
   }[kind];
   return `<div class="cheat" aria-label="Syntax examples">${rows.map(([a, b]) => `<div><code>${esc(a)}</code><span>${esc(b)}</span></div>`).join('')}</div>`;
 }
 function helpHTML(mode) {
+  if (mode === 'sequence') return `<div class="help">
+    <h3>How to draw</h3>
+    <p><strong>Lifelines:</strong> click Object lifeline for each object. Use Class lifeline for static methods. Drag a box sideways to reorder.</p>
+    <p><strong>Messages:</strong> pick Call, click the caller at the height you want, then the callee. The first call starts at the start dot on the far left. Click the same lifeline twice for a self-call.</p>
+    <p><strong>Frames:</strong> pick loop, alt, opt or par, then click where it starts and where it ends. Add an Else divider inside alt.</p>
+    <p class="muted">Activation bars follow from your calls and returns. Return arrows can be left out (minimal notation); the next message from a caller ends the newer activations.</p>
+    ${cheatHTML('sequence')}
+  </div>`;
   return `<div class="help">
     <h3>How to draw</h3>
     <p><strong>Boxes:</strong> click a tile in the toolbox, or drag it onto the paper. Edit the name and members here.</p>
@@ -855,7 +1392,7 @@ function renderResults() {
       if (!iss.ref) return;
       if (S.view === 'model') showMine();
       S.hl = null;
-      S.sel = iss.ref.node ? { kind: 'node', id: iss.ref.node } : { kind: 'edge', id: iss.ref.edge };
+      S.sel = iss.ref.node ? { kind: 'node', id: iss.ref.node } : iss.ref.edge ? { kind: 'edge', id: iss.ref.edge } : iss.ref.row ? { kind: 'row', id: iss.ref.row } : { kind: 'life', id: iss.ref.lifeline };
       renderCanvas(); renderInspector(); setSide('edit');
     });
   });
@@ -874,7 +1411,7 @@ async function askClaude() {
   const code = P.q.code.map((c) => `// ${c.file}\n${c.text}`).join('\n\n');
   const findings = res.issues.map((i) => `- ${i.sev.toUpperCase()} [${i.where}] ${i.msg}`).join('\n') || '- (none)';
   const prompt = `You are a CS2103T (NUS software engineering) tutor checking a student's UML ${P.p.mode} diagram.
-Course conventions: attributes "-name: Type", methods "+name(p: Type): Ret" (void return may be left out), associations as lines with navigability arrowheads and the multiplicity and role written next to the far class, {abstract}, <<interface>>, <<enumeration>>, static members underlined, object diagrams use name:Class (underlined) with attribute values and plain links without multiplicities.
+Course conventions: attributes "-name: Type", methods "+name(p: Type): Ret" (void return may be left out), associations as lines with navigability arrowheads and the multiplicity and role written next to the far class, {abstract}, <<interface>>, <<enumeration>>, static members underlined, object diagrams use name:Class (underlined) with attribute values and plain links without multiplicities. Sequence diagrams: lifelines :Class, calls as solid arrows labelled method(args), dashed return arrows (may be omitted in minimal notation), creation arrows pointing at the new object's box, self-calls nest an activation bar, static calls go to a <<class>> lifeline, loop/alt/opt frames with [guard] conditions only around calls. In the text dump, activation bars are implied by call order.
 
 QUESTION
 ${P.p.prompt}
@@ -923,7 +1460,7 @@ $('#btnReset').onclick = () => {
   }
   clearTimeout(resetArmed); resetArmed = null; b.textContent = 'Reset'; b.classList.remove('danger');
   const P = curPart();
-  S.diagrams[P.key] = clone(P.p.starter || { nodes: [], edges: [] });
+  S.diagrams[P.key] = emptyFor(P.p);
   delete S.results[P.key];
   S.view = 'mine'; S.sel = null; S.hl = null;
   store.set(P.key, S.diagrams[P.key]);
@@ -951,6 +1488,16 @@ $('#ioCopyText').onclick = () => copy(UMLGrader.toText(curDiagram()), 'Text vers
 $('#ioLoad').onclick = () => {
   let d;
   try { d = JSON.parse($('#ioText').value); } catch (e) { $('#ioMsg').textContent = 'That is not valid JSON: ' + e.message; return; }
+  if (isSeq()) {
+    if (!d || !Array.isArray(d.lifelines) || !Array.isArray(d.rows)) { $('#ioMsg').textContent = 'The JSON needs "lifelines" and "rows" arrays.'; return; }
+    d.lifelines.forEach((l) => { l.id = l.id || uid('l'); l.kind = ['object', 'class', 'actor'].includes(l.kind) ? l.kind : 'object'; l.name = l.name || ''; });
+    d.rows.forEach((r) => { r.id = r.id || uid('r'); });
+    const P0 = curPart();
+    S.diagrams[P0.key] = d; S.view = 'mine'; S.sel = null; delete S.results[P0.key];
+    store.set(P0.key, d);
+    closeIO(); renderTabs(); renderAll(); toast('Diagram loaded.');
+    return;
+  }
   if (!d || !Array.isArray(d.nodes) || !Array.isArray(d.edges)) { $('#ioMsg').textContent = 'The JSON needs "nodes" and "edges" arrays.'; return; }
   d.nodes.forEach((n) => { n.id = n.id || uid('n'); n.attrs = n.attrs || []; n.methods = n.methods || []; n.x = +n.x || 0; n.y = +n.y || 0; n.kind = n.kind === 'object' ? 'object' : 'class'; n.stereo = n.stereo || ''; });
   d.edges.forEach((e) => { e.id = e.id || uid('e'); });
@@ -982,7 +1529,7 @@ function renderQuestion() {
   $('#qpane').innerHTML = `
     <h1>${esc(P.q.title)}</h1>
     <p class="source">${esc(P.q.source || '')}</p>
-    <div class="prompt"><b>Part (${esc(P.p.id)}) · ${P.p.mode === 'object' ? 'object diagram' : 'class diagram'}</b>${esc(P.p.prompt)}</div>
+    <div class="prompt"><b>Part (${esc(P.p.id)}) · ${P.p.mode === 'object' ? 'object diagram' : P.p.mode === 'sequence' ? 'sequence diagram' : 'class diagram'}</b>${esc(P.p.prompt)}</div>
     <details class="codes" ${window.innerWidth > 760 ? 'open' : ''}><summary>Code · ${P.q.code.length} file${P.q.code.length === 1 ? '' : 's'}</summary>
     ${P.q.code.map((c) => `<figure class="codefile"><figcaption>${esc(c.file)}</figcaption><pre><code>${highlight(c.text)}</code></pre></figure>`).join('')}</details>`;
 }
@@ -1018,7 +1565,7 @@ async function boot() {
   S.questions.forEach((q, qi) => q.parts.forEach((p) => {
     const key = `${q.id}/${p.id}`;
     S.parts.push({ q, p, key, label: `Q${qi + 1} (${p.id})` });
-    S.diagrams[key] = store.get(key) || clone(p.starter || { nodes: [], edges: [] });
+    S.diagrams[key] = store.get(key) || emptyFor(p);
   }));
   let start = 0;
   try { start = Math.min(S.parts.length - 1, Math.max(0, parseInt(localStorage.getItem('umldrill.v1.cur') || '0', 10) || 0)); } catch {}

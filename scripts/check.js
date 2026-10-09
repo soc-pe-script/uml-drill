@@ -30,6 +30,7 @@ const ok = (msg) => console.log(`  ✓ ${msg}`);
 const clone = (x) => JSON.parse(JSON.stringify(x));
 
 function applyPatch(model, patch = {}) {
+  if (model.rows) return applySeqPatch(model, patch);
   const d = clone(model);
   for (const [id, fields] of Object.entries(patch.nodes || {})) {
     const n = d.nodes.find((x) => x.id === id);
@@ -48,7 +49,56 @@ function applyPatch(model, patch = {}) {
   return d;
 }
 
+function applySeqPatch(model, patch) {
+  const d = clone(model);
+  for (const [id, fields] of Object.entries(patch.lifelines || {})) {
+    const l = d.lifelines.find((x) => x.id === id);
+    if (!l) throw new Error(`patch.lifelines: no lifeline "${id}"`);
+    Object.assign(l, fields);
+  }
+  for (const [id, fields] of Object.entries(patch.rows || {})) {
+    const r = d.rows.find((x) => x.id === id);
+    if (!r) throw new Error(`patch.rows: no row "${id}"`);
+    Object.assign(r, fields);
+  }
+  const rmL = new Set(patch.removeLifelines || []);
+  const rmR = new Set(patch.removeRows || []);
+  d.lifelines = d.lifelines.filter((l) => !rmL.has(l.id)).concat(patch.addLifelines || []);
+  d.rows = d.rows.filter((r) => !rmR.has(r.id) && !rmL.has(r.from) && !rmL.has(r.to));
+  for (const { after, row } of patch.addRows || []) {
+    const i = after ? d.rows.findIndex((r) => r.id === after) : -1;
+    if (after && i < 0) throw new Error(`patch.addRows: no row "${after}"`);
+    d.rows.splice(i + 1, 0, row);
+  }
+  if (patch.order) {
+    const byId = Object.fromEntries(d.rows.map((r) => [r.id, r]));
+    if (patch.order.length !== d.rows.length || patch.order.some((id) => !byId[id])) throw new Error('patch.order must list every row id exactly once');
+    d.rows = patch.order.map((id) => byId[id]);
+  }
+  return d;
+}
+
+const ROW_TYPES = ['call', 'return', 'create', 'delete', 'frame', 'else', 'end'];
+function validateSeq(where, d) {
+  if (!d || !Array.isArray(d.lifelines) || !Array.isArray(d.rows)) return fail(where, 'needs "lifelines" and "rows" arrays');
+  const ids = new Set(['@start']);
+  for (const l of d.lifelines) {
+    if (!l.id || ids.has(l.id)) fail(where, `lifeline id "${l.id}" missing or duplicate`);
+    ids.add(l.id);
+    if (!['object', 'class', 'actor'].includes(l.kind)) fail(where, `lifeline "${l.id}": kind must be object, class or actor`);
+  }
+  const rowIds = new Set();
+  for (const r of d.rows) {
+    if (!r.id || rowIds.has(r.id)) fail(where, `row id "${r.id}" missing or duplicate`);
+    rowIds.add(r.id);
+    if (!ROW_TYPES.includes(r.type)) fail(where, `row "${r.id}": type must be one of ${ROW_TYPES.join(', ')}`);
+    if (['call', 'return', 'create', 'delete'].includes(r.type) && (!ids.has(r.from) || !ids.has(r.to))) fail(where, `row "${r.id}": from/to must be lifeline ids or "@start"`);
+    if (r.type === 'frame' && !['loop', 'alt', 'opt', 'par'].includes(r.frame)) fail(where, `row "${r.id}": frame must be loop, alt, opt or par`);
+  }
+}
+
 function validateDiagram(where, d) {
+  if (d && d.rows) return validateSeq(where, d);
   if (!d || !Array.isArray(d.nodes) || !Array.isArray(d.edges)) return fail(where, 'needs "nodes" and "edges" arrays');
   const ids = new Set();
   for (const n of d.nodes) {
@@ -77,7 +127,7 @@ function validateQuestion(file, q) {
   (q.parts || []).forEach((p) => {
     const pw = `${where} part ${p.id}`;
     for (const f of ['id', 'mode', 'prompt', 'key', 'model']) if (p[f] === undefined) fail(pw, `missing "${f}"`);
-    if (!['class', 'object'].includes(p.mode)) fail(pw, 'mode must be "class" or "object"');
+    if (!['class', 'object', 'sequence'].includes(p.mode)) fail(pw, 'mode must be "class", "object" or "sequence"');
     validateDiagram(`${pw} model`, p.model);
     if (p.starter) validateDiagram(`${pw} starter`, p.starter);
     if (p.mode === 'class' && p.key) {
@@ -85,6 +135,18 @@ function validateQuestion(file, q) {
         if (!EDGE_TYPES.includes(r.type)) fail(pw, `relation ${r.from}→${r.to}: bad type "${r.type}"`);
         if (!p.key.classes || !p.key.classes[r.from] || !p.key.classes[r.to]) fail(pw, `relation ${r.from}→${r.to}: both ends must be listed in key.classes`);
       }
+    }
+    if (p.mode === 'sequence' && p.key) {
+      const refs = new Set((p.key.lifelines || []).map((l) => l.ref));
+      if (!p.key.entry || !refs.has(p.key.entry.to)) fail(pw, 'key.entry.to must be a lifeline ref');
+      const walk = (items) => (items || []).forEach((e) => {
+        if (e.call && !refs.has(e.call)) fail(pw, `call to unknown ref "${e.call}"`);
+        if (e.create && !refs.has(e.create)) fail(pw, `create of unknown ref "${e.create}"`);
+        if (e.frame && !['loop', 'alt', 'opt', 'par'].includes(e.frame)) fail(pw, `bad frame "${e.frame}"`);
+        walk(e.body);
+        (e.branches || []).forEach((b) => walk(b.body));
+      });
+      walk(p.key.body);
     }
     if (p.mode === 'object' && p.key) {
       const refs = new Set((p.key.objects || []).map((o) => o.ref));
