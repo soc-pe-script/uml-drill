@@ -1,0 +1,110 @@
+{
+  "id": "playlist",
+  "title": "Playlist and tracks",
+  "source": "Original question for UML Drill.",
+  "author": "soc-pe-script",
+  "tags": ["class-diagram", "static", "array-multiplicity", "interface", "abstract"],
+  "code": [
+    { "file": "Playable.java", "text": "public interface Playable {\n    void play();\n}" },
+    { "file": "Track.java", "text": "public abstract class Track implements Playable {\n    protected String title;\n\n    public abstract int getLength();\n}" },
+    { "file": "Song.java", "text": "public class Song extends Track {\n    private Artist artist;\n    private int length;\n\n    @Override\n    public int getLength() {\n        return length;\n    }\n\n    @Override\n    public void play() {\n        // ...\n    }\n}" },
+    { "file": "Artist.java", "text": "public class Artist {\n    private String name;\n\n    public String getName() {\n        return name;\n    }\n}" },
+    { "file": "Playlist.java", "text": "public class Playlist {\n    private static int count = 0;\n    private Track[] tracks = new Track[50];\n    private Artist curator;\n\n    public void add(Track t) {\n        // ...\n    }\n\n    public Track get(int index) {\n        return tracks[index];\n    }\n}" }
+  ],
+  "parts": [
+    {
+      "id": "a",
+      "mode": "class",
+      "prompt": "Draw a class diagram to represent the code. Show all attributes, methods, associations, navigabilities, visibilities, known multiplicities, and association roles. Show associations as lines. Use the given layout.",
+      "canvas": { "width": 1000, "height": 640 },
+      "starter": {
+        "nodes": [
+          { "id": "playable", "kind": "class", "stereo": "", "name": "Playable", "attrs": [], "methods": [], "x": 400, "y": 30 },
+          { "id": "track", "kind": "class", "stereo": "", "name": "Track", "attrs": [], "methods": [], "x": 400, "y": 220 },
+          { "id": "song", "kind": "class", "stereo": "", "name": "Song", "attrs": [], "methods": [], "x": 400, "y": 440 },
+          { "id": "artist", "kind": "class", "stereo": "", "name": "Artist", "attrs": [], "methods": [], "x": 760, "y": 440 },
+          { "id": "playlist", "kind": "class", "stereo": "", "name": "Playlist", "attrs": [], "methods": [], "x": 40, "y": 220 }
+        ],
+        "edges": []
+      },
+      "key": {
+        "classes": {
+          "Playable": { "stereo": "interface", "methods": [{ "name": "play", "vis": "+", "params": [] }] },
+          "Track": {
+            "stereo": "abstract",
+            "attrs": [{ "name": "title", "vis": "#", "type": ["String"] }],
+            "methods": [{ "name": "getLength", "vis": "+", "params": [], "ret": "int", "abstract": true }]
+          },
+          "Song": {
+            "attrs": [{ "name": "length", "vis": "-", "type": ["int"] }],
+            "methods": [
+              { "name": "getLength", "vis": "+", "params": [], "ret": "int" },
+              { "name": "play", "vis": "+", "params": [] }
+            ]
+          },
+          "Artist": {
+            "attrs": [{ "name": "name", "vis": "-", "type": ["String"] }],
+            "methods": [{ "name": "getName", "vis": "+", "params": [], "ret": "String" }]
+          },
+          "Playlist": {
+            "attrs": [{ "name": "count", "vis": "-", "type": ["int"], "static": true }],
+            "methods": [
+              { "name": "add", "vis": "+", "params": [{ "name": "t", "type": "Track" }] },
+              { "name": "get", "vis": "+", "params": [{ "name": "index", "type": "int" }], "ret": "Track" }
+            ]
+          }
+        },
+        "relations": [
+          { "type": "realization", "from": "Track", "to": "Playable", "typeHint": "Track implements an interface." },
+          { "type": "inheritance", "from": "Song", "to": "Track", "typeHint": "Song extends Track." },
+          {
+            "type": "association", "from": "Song", "to": "Artist", "nav": "to", "toMult": ["", "0..1", "1"], "toRole": ["artist"],
+            "typeHint": "Song keeps an Artist in a field, so this is an association."
+          },
+          {
+            "type": "association", "from": "Playlist", "to": "Track", "nav": "to", "toMult": ["0..50"], "toRole": ["tracks"],
+            "typeHint": "Playlist keeps an array of Tracks in a field, so this is an association.",
+            "missingHint": "The array has a fixed size of 50, so the multiplicity is 0..50."
+          },
+          {
+            "type": "association", "from": "Playlist", "to": "Artist", "nav": "to", "toMult": ["", "0..1", "1"], "toRole": ["curator"],
+            "typeHint": "Playlist keeps an Artist in a field, so this is an association."
+          }
+        ]
+      },
+      "model": {
+        "nodes": [
+          { "id": "playable", "kind": "class", "stereo": "interface", "name": "Playable", "attrs": [], "methods": ["+play()"], "x": 400, "y": 30 },
+          { "id": "track", "kind": "class", "stereo": "abstract", "name": "Track", "attrs": ["#title: String"], "methods": ["+getLength(): int {abstract}"], "x": 400, "y": 220 },
+          { "id": "song", "kind": "class", "stereo": "", "name": "Song", "attrs": ["-length: int"], "methods": ["+getLength(): int", "+play()"], "x": 400, "y": 440 },
+          { "id": "artist", "kind": "class", "stereo": "", "name": "Artist", "attrs": ["-name: String"], "methods": ["+getName(): String"], "x": 760, "y": 440 },
+          { "id": "playlist", "kind": "class", "stereo": "", "name": "Playlist", "attrs": ["-count: int = 0 {static}"], "methods": ["+add(t: Track)", "+get(index: int): Track"], "x": 40, "y": 220 }
+        ],
+        "edges": [
+          { "id": "m1", "type": "realization", "from": "track", "to": "playable" },
+          { "id": "m2", "type": "inheritance", "from": "song", "to": "track" },
+          { "id": "m3", "type": "association", "from": "song", "to": "artist", "navTo": true, "toRole": "artist" },
+          { "id": "m4", "type": "association", "from": "playlist", "to": "track", "navTo": true, "toMult": "0..50", "toRole": "tracks" },
+          { "id": "m5", "type": "association", "from": "playlist", "to": "artist", "navTo": true, "toRole": "curator" }
+        ]
+      },
+      "examples": [
+        {
+          "name": "Array shown as an attribute instead of a line",
+          "expect": { "errors": 1 },
+          "patch": { "nodes": { "playlist": { "attrs": ["-count: int {static}", "-tracks: Track[]"] } }, "removeEdges": ["m4"] }
+        },
+        {
+          "name": "Static field not underlined, * instead of 0..50",
+          "expect": { "errors": 2 },
+          "patch": { "nodes": { "playlist": { "attrs": ["-count: int"] } }, "edges": { "m4": { "toMult": "*" } } }
+        },
+        {
+          "name": "getLength not marked abstract in Track, protected shown as private",
+          "expect": { "errors": 2 },
+          "patch": { "nodes": { "track": { "attrs": ["-title: String"], "methods": ["+getLength(): int"] } } }
+        }
+      ]
+    }
+  ]
+}

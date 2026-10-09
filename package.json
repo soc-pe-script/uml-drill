@@ -1,0 +1,11 @@
+{
+  "name": "uml-drill",
+  "version": "0.1.0",
+  "private": true,
+  "description": "CS2103T-style UML class and object diagram practice with automatic grading",
+  "scripts": {
+    "test": "node scripts/check.js",
+    "start": "npx serve ."
+  },
+  "engines": { "node": ">=18" }
+}

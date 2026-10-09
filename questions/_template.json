@@ -1,0 +1,34 @@
+{
+  "id": "your-question-id",
+  "title": "Short name of the scenario",
+  "source": "Original. Say where the idea came from.",
+  "author": "your-github-name",
+  "tags": ["class-diagram"],
+  "code": [
+    { "file": "Example.java", "text": "public class Example {\n    private String name;\n}" }
+  ],
+  "parts": [
+    {
+      "id": "a",
+      "mode": "class",
+      "prompt": "Draw a class diagram to represent the code. Show all attributes, methods, associations, navigabilities, visibilities, known multiplicities, and association roles. Show associations as lines.",
+      "canvas": { "width": 1000, "height": 640 },
+      "starter": { "nodes": [], "edges": [] },
+      "key": {
+        "classes": {
+          "Example": { "attrs": [{ "name": "name", "vis": "-", "type": ["String"] }] }
+        },
+        "relations": []
+      },
+      "model": {
+        "nodes": [
+          { "id": "example", "kind": "class", "stereo": "", "name": "Example", "attrs": ["-name: String"], "methods": [], "x": 60, "y": 60 }
+        ],
+        "edges": []
+      },
+      "examples": [
+        { "name": "Java-style field", "expect": { "errors": 1 }, "patch": { "nodes": { "example": { "attrs": ["private String name"] } } } }
+      ]
+    }
+  ]
+}

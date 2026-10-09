@@ -1,0 +1,172 @@
+# Contributing questions
+
+Each question is one JSON file in `questions/`. You don't need to touch any code.
+
+## Quick start
+
+1. Fork the repo and clone your fork.
+2. Copy `questions/_template.json` to `questions/<your-id>.json`. Use lowercase letters, digits and dashes for the id, and make the file name match it.
+3. Add the file name to `questions/index.json`.
+4. Fill in the code, prompt, answer key and model answer (details below).
+5. Run `node scripts/check.js <your-id>` until it passes.
+6. Open the app locally (`npx serve .`), try your question, and draw at least one wrong answer to see the feedback.
+7. Open a pull request.
+
+Node 18 or newer is the only requirement. There are no dependencies to install.
+
+## Ground rules
+
+- **Write original questions.** Don't copy past exam papers or tutorial text word for word. Change the domain, names and structure. Put where the idea came from in `source`.
+- **One question, one idea.** Two or three parts (class diagram, object diagram) on the same code is ideal.
+- **Keep code short.** Under about 60 lines in total, like the exam.
+- **Every rule must be defensible.** If markers would accept two forms, accept both (see "Handling ambiguity").
+
+## File format
+
+```jsonc
+{
+  "id": "library-loans",              // must match the file name
+  "title": "Library loans",
+  "source": "Original. Idea from the Week 4 association class topic.",
+  "author": "your-github-name",
+  "tags": ["class-diagram", "association-class"],
+  "code": [{ "file": "Book.java", "text": "public class Book { ... }" }],
+  "parts": [ /* one entry per part, see below */ ]
+}
+```
+
+### A part
+
+```jsonc
+{
+  "id": "a",                          // shown as Q3 (a)
+  "mode": "class",                    // "class" or "object"
+  "prompt": "Draw a class diagram ...",
+  "canvas": { "width": 1000, "height": 640 },
+  "starter": { "nodes": [...], "edges": [] },   // the given layout; empty for "draw from scratch"
+  "key": { ... },                     // what the grader checks
+  "model": { "nodes": [...], "edges": [...] }, // one correct diagram, shown as the model answer
+  "examples": [ ... ]                 // wrong answers with the expected error count (tests)
+}
+```
+
+**Tip:** don't write `starter` or `model` by hand. Draw it in the app, press **Import / export**, copy the JSON, and paste it in.
+
+### Key for a class diagram
+
+```jsonc
+"key": {
+  "classes": {
+    "Inventory": {
+      "stereo": "",                   // "", "interface", "abstract" or "enumeration"
+      "attrs": [{ "name": "count", "vis": "-", "type": ["int"], "static": true }],
+      "methods": [
+        { "name": "getItemCount", "vis": "+", "params": [], "ret": "int" },
+        { "name": "add", "vis": "+", "params": [{ "name": "s", "type": "Item" }] }
+      ],
+      "optionalMethods": [ /* e.g. constructors: checked if drawn, fine if left out */ ]
+    },
+    "Rating": { "stereo": "enumeration", "values": ["GOOD", "OK", "POOR"] }
+  },
+  "relations": [
+    { "type": "inheritance", "from": "StockItem", "to": "Item" },
+    {
+      "type": "association", "from": "Inventory", "to": "Item",
+      "nav": "to",                    // arrowhead at "to". Also "from", "both", "none"
+      "toMult": ["*"],                // accepted multiplicities next to "to". Add "" to allow blank
+      "toRole": ["items"],            // accepted role names next to "to"
+      "typeHint": "Inventory keeps a List of Items in a field."
+    },
+    { "type": "dependency", "from": "Inventory", "to": "Billable", "optional": true }
+  ]
+}
+```
+
+Direction rules for `from` → `to`:
+
+| type | from | to |
+| --- | --- | --- |
+| inheritance, realization | child / implementing class | parent / interface |
+| dependency | user | used |
+| association | class that holds the reference | referenced class |
+| composition, aggregation | whole (diamond end) | part |
+
+Things the grader does without being told:
+
+- Flags a reference shown both as an attribute and as a line (uses the role names).
+- Flags a reference shown only as an attribute, once, with a "draw it as a line" message.
+- Flags Java-style members (`private String name`, `int getCount()`).
+- Accepts `void` or no return type for void methods, and parameter types without names (as a note).
+- Treats `*` and `0..*` as the same.
+- Flags any class or line that is not in the key.
+
+### Key for an object diagram
+
+```jsonc
+"key": {
+  "objects": [
+    { "ref": "inv", "class": ["Inventory"],
+      "forbidAttrs": { "items": "items is shown by the link. Don't also list it." } },
+    { "ref": "item", "class": ["StockItem"],
+      "wrongClass": { "Item": "Show it as :StockItem, its real class." },
+      "attrs": [{ "name": "name", "value": ["spanner"] }] }
+  ],
+  "links": [{ "a": "inv", "b": "item" }],
+  "extraObjectHints": { "Item": "There is only one item object." }
+}
+```
+
+Values are compared without quotes, so `"spanner"` and `spanner` both match.
+
+## Handling ambiguity
+
+CS2103T marking is flexible, and questions will often be ambiguous. Encode that in the key instead of picking one answer:
+
+| Situation | How to encode it |
+| --- | --- |
+| Two kinds of line are both fine | `"acceptTypes": ["composition"]` plus `"acceptNote"` |
+| A line is fine but not required | `"optional": true` |
+| Attribute form is also accepted | `"orAttribute": { "name": "rating", "vis": "-", "type": ["Rating"] }` |
+| Multiplicity is unknown from the code | include `""` in `toMult`, e.g. `["", "0..1", "1"]` |
+| A member may be drawn or left out | put it in `optionalMethods` / `optionalAttrs` |
+| An object attribute can be a linked object | `"orLinkedObject": { "class": "Rating", "name": ["POOR"] }` |
+
+Accepted alternatives show up as **notes**, not errors. If you're unsure whether something is acceptable, make it accepted with a note, and say so in the PR so a reviewer can decide.
+
+## Examples (tests)
+
+Each part should have at least three `examples`. Each one patches the model answer to make a common mistake and states the expected count:
+
+```jsonc
+{
+  "name": "items shown as attribute and as a line",
+  "expect": { "errors": 1 },          // also "notes", or "errorsAtLeast"
+  "patch": {
+    "nodes": { "inventory": { "attrs": ["-items: List<Item>"] } },  // overwrite fields by node id
+    "edges": { "m5": { "navTo": false } },                           // overwrite fields by edge id
+    "removeEdges": ["m6"], "removeNodes": [],
+    "addNodes": [], "addEdges": []
+  }
+}
+```
+
+`node scripts/check.js` fails if the model answer has any error, or if an example's count differs. Run it with `-v` to see every message.
+
+Good mistakes to cover: wrong arrow direction, missing navigability, multiplicity at the wrong end, attribute and line both shown, Java-style members, missing `{abstract}` or `<<interface>>`, and (for object diagrams) multiplicities on links or the same object drawn twice.
+
+## Pull request checklist
+
+- [ ] `node scripts/check.js` passes.
+- [ ] The file is listed in `questions/index.json`.
+- [ ] The question is original, and `source` says where the idea came from.
+- [ ] At least three examples per part.
+- [ ] I tried the question in the app and the messages read clearly.
+- [ ] Any judgement calls on accepted alternatives are listed in the PR description.
+
+## Changing the grader
+
+Grader changes affect every question, so open an issue first. Then edit `grader.js` (no DOM, runs in Node and the browser) and make sure `node scripts/check.js` still passes for all questions. Add an example that covers the new behaviour.
+
+## Using an AI agent
+
+You can ask Claude, Copilot or another agent to write a question for you. Point it at `AGENTS.md`, which has step-by-step instructions. You are still responsible for the PR: read the key and run the check yourself.

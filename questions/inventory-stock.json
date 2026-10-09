@@ -1,0 +1,224 @@
+{
+  "id": "inventory-stock",
+  "title": "Inventory and stock items",
+  "source": "CS2103T AY26/27 S1 Week 8 tutorial (adapted from a past exam). Replace with an original question before making the repo public.",
+  "author": "soc-pe-script",
+  "tags": ["class-diagram", "object-diagram", "interface", "abstract", "enum"],
+  "code": [
+    { "file": "Billable.java", "text": "public interface Billable {\n    void bill();\n}" },
+    { "file": "Item.java", "text": "public abstract class Item\n        implements Billable {\n    public abstract void print();\n}" },
+    { "file": "StockItem.java", "text": "public class StockItem extends Item {\n    private Review review;\n    private String name;\n\n    public StockItem(\n        String name, Rating rating) {\n\n        this.name = name;\n        this.review = new Review(rating);\n    }\n\n    @Override\n    public void print() {\n        //...\n    }\n\n    @Override\n    public void bill() {\n        //...\n    }\n}" },
+    { "file": "Rating.java", "text": "public enum Rating {\n    GOOD, OK, POOR\n}" },
+    { "file": "Review.java", "text": "public class Review {\n    private final Rating rating;\n\n    public Review(Rating rating) {\n        this.rating = rating;\n    }\n}" },
+    { "file": "Inventory.java", "text": "import java.util.List;\n\npublic class Inventory {\n    private List<Item> items;\n\n    public int getItemCount() {\n        return items.size();\n    }\n\n    public void generateBill(Billable b) {\n        // ...\n    }\n\n    public void add(Item s) {\n        items.add(s);\n    }\n}" }
+  ],
+  "parts": [
+    {
+      "id": "a",
+      "mode": "class",
+      "prompt": "Draw a class diagram to represent the code. Show all attributes, methods, associations, navigabilities, visibilities, known multiplicities, and association roles. Show associations as lines. Use the given layout.",
+      "canvas": { "width": 1000, "height": 640 },
+      "starter": {
+        "nodes": [
+          { "id": "billable", "kind": "class", "stereo": "", "name": "Billable", "attrs": [], "methods": [], "x": 560, "y": 30 },
+          { "id": "rating", "kind": "class", "stereo": "", "name": "Rating", "attrs": [], "methods": [], "x": 40, "y": 230 },
+          { "id": "item", "kind": "class", "stereo": "", "name": "Item", "attrs": [], "methods": [], "x": 330, "y": 230 },
+          { "id": "inventory", "kind": "class", "stereo": "", "name": "Inventory", "attrs": [], "methods": [], "x": 680, "y": 230 },
+          { "id": "review", "kind": "class", "stereo": "", "name": "Review", "attrs": [], "methods": [], "x": 40, "y": 450 },
+          { "id": "stockitem", "kind": "class", "stereo": "", "name": "StockItem", "attrs": [], "methods": [], "x": 330, "y": 430 }
+        ],
+        "edges": []
+      },
+      "key": {
+        "classes": {
+          "Billable": {
+            "stereo": "interface",
+            "methods": [{ "name": "bill", "vis": "+", "params": [] }]
+          },
+          "Item": {
+            "stereo": "abstract",
+            "methods": [{ "name": "print", "vis": "+", "params": [], "abstract": true }]
+          },
+          "StockItem": {
+            "attrs": [{ "name": "name", "vis": "-", "type": ["String"] }],
+            "methods": [
+              { "name": "print", "vis": "+", "params": [] },
+              { "name": "bill", "vis": "+", "params": [] }
+            ],
+            "optionalMethods": [
+              { "name": "StockItem", "vis": "+", "params": [{ "name": "name", "type": "String" }, { "name": "rating", "type": "Rating" }] }
+            ]
+          },
+          "Review": {
+            "optionalMethods": [
+              { "name": "Review", "vis": "+", "params": [{ "name": "rating", "type": "Rating" }] }
+            ]
+          },
+          "Rating": { "stereo": "enumeration", "values": ["GOOD", "OK", "POOR"] },
+          "Inventory": {
+            "methods": [
+              { "name": "getItemCount", "vis": "+", "params": [], "ret": "int" },
+              { "name": "generateBill", "vis": "+", "params": [{ "name": "b", "type": "Billable" }] },
+              { "name": "add", "vis": "+", "params": [{ "name": "s", "type": "Item" }] }
+            ]
+          }
+        },
+        "relations": [
+          { "type": "realization", "from": "Item", "to": "Billable", "typeHint": "Item implements an interface." },
+          { "type": "inheritance", "from": "StockItem", "to": "Item", "typeHint": "StockItem extends Item." },
+          {
+            "type": "association", "from": "StockItem", "to": "Review", "nav": "to", "toMult": ["1"], "toRole": ["review"],
+            "acceptTypes": ["composition"],
+            "acceptNote": "Composition is also accepted here: StockItem creates its own Review and nothing else holds it.",
+            "typeHint": "StockItem keeps a Review in a field, so this is an association."
+          },
+          {
+            "type": "association", "from": "Review", "to": "Rating", "nav": "to", "toMult": ["1"], "toRole": ["rating"],
+            "orAttribute": { "name": "rating", "vis": "-", "type": ["Rating"] },
+            "typeHint": "Review keeps a Rating in a field, so this is an association."
+          },
+          {
+            "type": "association", "from": "Inventory", "to": "Item", "nav": "to", "toMult": ["*"], "toRole": ["items"],
+            "typeHint": "Inventory keeps a List of Items in a field, so this is an association with multiplicity *."
+          },
+          {
+            "type": "dependency", "from": "Inventory", "to": "Billable", "optional": true,
+            "typeHint": "Inventory only uses Billable as a method parameter, so at most a dependency."
+          },
+          {
+            "type": "dependency", "from": "StockItem", "to": "Rating", "optional": true,
+            "typeHint": "StockItem has no Rating field. It only passes a Rating to its constructor, so at most a dependency."
+          }
+        ]
+      },
+      "model": {
+        "nodes": [
+          { "id": "billable", "kind": "class", "stereo": "interface", "name": "Billable", "attrs": [], "methods": ["+bill()"], "x": 560, "y": 30 },
+          { "id": "rating", "kind": "class", "stereo": "enumeration", "name": "Rating", "attrs": ["GOOD", "OK", "POOR"], "methods": [], "x": 40, "y": 230 },
+          { "id": "item", "kind": "class", "stereo": "abstract", "name": "Item", "attrs": [], "methods": ["+print() {abstract}"], "x": 330, "y": 230 },
+          { "id": "inventory", "kind": "class", "stereo": "", "name": "Inventory", "attrs": [], "methods": ["+getItemCount(): int", "+generateBill(b: Billable)", "+add(s: Item)"], "x": 680, "y": 230 },
+          { "id": "review", "kind": "class", "stereo": "", "name": "Review", "attrs": [], "methods": ["+Review(rating: Rating)"], "x": 40, "y": 450 },
+          { "id": "stockitem", "kind": "class", "stereo": "", "name": "StockItem", "attrs": ["-name: String"], "methods": ["+StockItem(name: String, rating: Rating)", "+print()", "+bill()"], "x": 330, "y": 430 }
+        ],
+        "edges": [
+          { "id": "m1", "type": "realization", "from": "item", "to": "billable" },
+          { "id": "m2", "type": "inheritance", "from": "stockitem", "to": "item" },
+          { "id": "m3", "type": "association", "from": "stockitem", "to": "review", "navTo": true, "toMult": "1", "toRole": "review" },
+          { "id": "m4", "type": "association", "from": "review", "to": "rating", "navTo": true, "toMult": "1", "toRole": "rating" },
+          { "id": "m5", "type": "association", "from": "inventory", "to": "item", "navTo": true, "toMult": "*", "toRole": "items" },
+          { "id": "m6", "type": "dependency", "from": "inventory", "to": "billable" }
+        ]
+      },
+      "examples": [
+        {
+          "name": "Tutorial slide Q2: Inventory with items twice and no return type",
+          "expect": { "errors": 2, "notes": 2 },
+          "patch": {
+            "nodes": { "inventory": { "attrs": ["-items: List<Item>"], "methods": ["+getItemCount()", "+generateBill(Billable)", "+add(Item)"] } },
+            "removeEdges": ["m6"]
+          }
+        },
+        {
+          "name": "Java habits: Java-style field, inheritance instead of realization, no <<interface>>",
+          "expect": { "errors": 3 },
+          "patch": {
+            "nodes": {
+              "stockitem": { "attrs": ["private String name"] },
+              "billable": { "stereo": "" }
+            },
+            "edges": { "m1": { "type": "inheritance" } }
+          }
+        },
+        {
+          "name": "Composition for Review is accepted",
+          "expect": { "errors": 0, "notes": 1 },
+          "patch": { "edges": { "m3": { "type": "composition" } } }
+        },
+        {
+          "name": "items drawn only as an attribute",
+          "expect": { "errors": 1 },
+          "patch": {
+            "nodes": { "inventory": { "attrs": ["-items: List<Item>"] } },
+            "removeEdges": ["m5"]
+          }
+        },
+        {
+          "name": "Multiplicity at the wrong end and arrow reversed",
+          "expect": { "errors": 2 },
+          "patch": { "edges": { "m5": { "navTo": false, "navFrom": true, "toMult": "", "fromMult": "*" } } }
+        }
+      ]
+    },
+    {
+      "id": "b",
+      "mode": "object",
+      "prompt": "Draw an object diagram for the situation where the inventory has one item named spanner and a review of POOR rating, i.e., new Inventory().add(new StockItem(\"spanner\", Rating.POOR)).",
+      "canvas": { "width": 1000, "height": 420 },
+      "starter": { "nodes": [], "edges": [] },
+      "key": {
+        "objects": [
+          {
+            "ref": "inv", "class": ["Inventory"],
+            "forbidAttrs": { "items": "items is already shown by the link to the StockItem object. Don't also list it as an attribute." }
+          },
+          {
+            "ref": "item", "class": ["StockItem"],
+            "wrongClass": { "Item": "This object is a StockItem (it has a name and a review). Show it as :StockItem." },
+            "attrs": [{ "name": "name", "value": ["spanner"] }],
+            "forbidAttrs": { "review": "review is already shown by the link to the Review object. Don't also list it as an attribute." }
+          },
+          {
+            "ref": "rev", "class": ["Review"],
+            "attrs": [{ "name": "rating", "value": ["POOR"], "orLinkedObject": { "class": "Rating", "name": ["POOR"] } }]
+          }
+        ],
+        "links": [{ "a": "inv", "b": "item" }, { "a": "item", "b": "rev" }],
+        "extraObjectHints": {
+          "Item": "There is only one item object. Show it once, as :StockItem, not also as :Item.",
+          "Billable": "Billable is an interface that the StockItem implements. It is not a separate object."
+        }
+      },
+      "model": {
+        "nodes": [
+          { "id": "o1", "kind": "object", "name": ":Inventory", "attrs": [], "methods": [], "x": 60, "y": 140 },
+          { "id": "o2", "kind": "object", "name": ":StockItem", "attrs": ["name = \"spanner\""], "methods": [], "x": 360, "y": 140 },
+          { "id": "o3", "kind": "object", "name": ":Review", "attrs": ["rating = POOR"], "methods": [], "x": 680, "y": 140 }
+        ],
+        "edges": [
+          { "id": "l1", "type": "link", "from": "o1", "to": "o2" },
+          { "id": "l2", "type": "link", "from": "o2", "to": "o3" }
+        ]
+      },
+      "examples": [
+        {
+          "name": "Item and StockItem both drawn, multiplicity on a link",
+          "expect": { "errors": 2 },
+          "patch": {
+            "addNodes": [{ "id": "o4", "kind": "object", "name": ":Item", "attrs": [], "methods": [], "x": 360, "y": 300 }],
+            "edges": { "l1": { "toMult": "*" } }
+          }
+        },
+        {
+          "name": "POOR shown as a linked Rating object",
+          "expect": { "errors": 0, "notes": 1 },
+          "patch": {
+            "nodes": { "o3": { "attrs": [] } },
+            "addNodes": [{ "id": "o5", "kind": "object", "name": "POOR:Rating", "attrs": [], "methods": [], "x": 680, "y": 300 }],
+            "addEdges": [{ "id": "l3", "type": "link", "from": "o3", "to": "o5" }]
+          }
+        },
+        {
+          "name": "Class boxes instead of objects",
+          "expect": { "errors": 3 },
+          "patch": {
+            "nodes": {
+              "o1": { "kind": "class", "name": "Inventory" },
+              "o2": { "kind": "class", "name": "StockItem" },
+              "o3": { "kind": "class", "name": "Review" }
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
