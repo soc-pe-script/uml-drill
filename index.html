@@ -1301,7 +1301,7 @@ function renderInspector() {
         <option value="class">Class</option><option value="interface">Interface «interface»</option><option value="abstract">Abstract class {abstract}</option><option value="enumeration">Enumeration «enumeration»</option><option value="object">Object (name:Class)</option>
       </select></label>
       <label class="field"><span>${isEnum ? 'Enum values, one per line' : isObj ? 'Attribute values, one per line' : 'Attributes, one per line'}</span><textarea id="f-attrs" rows="4" spellcheck="false">${esc((n.attrs || []).join('\n'))}</textarea></label>
-      <label class="field"><span>${isObj ? 'Methods (objects show none)' : 'Methods, one per line'}</span><textarea id="f-methods" rows="4" spellcheck="false">${esc((n.methods || []).join('\n'))}</textarea></label>
+      ${isObj && !(n.methods || []).length ? '' : `<label class="field"><span>${isObj ? 'Methods (objects show none; delete these)' : 'Methods, one per line'}</span><textarea id="f-methods" rows="4" spellcheck="false">${esc((n.methods || []).join('\n'))}</textarea></label>`}
       ${cheatHTML(isObj ? 'object' : isEnum ? 'enum' : 'class')}
       <div class="actions"><button class="btn danger" id="f-del" type="button">Delete box</button></div>`;
     $('#f-kind').value = kindVal;
@@ -1313,7 +1313,8 @@ function renderInspector() {
       renderCanvas(); renderInspector(); save();
     };
     $('#f-attrs').oninput = (e) => { n.attrs = linesOf(e.target.value); renderCanvas(); save(); };
-    $('#f-methods').oninput = (e) => { n.methods = linesOf(e.target.value); renderCanvas(); save(); };
+    const fm = $('#f-methods');
+    if (fm) fm.oninput = (e) => { n.methods = linesOf(e.target.value); renderCanvas(); save(); };
     $('#f-del').onclick = deleteSel;
     return;
   }
