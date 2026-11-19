@@ -39,5 +39,6 @@ You are helping someone add a question to UML Drill, a practice tool for CS2103T
 ## Task: change the grader or the app
 
 - `grader.js` is pure JavaScript with no DOM; it must run in Node and the browser.
+- `author.js` holds key generation, example patches and the question checks. Author mode and `scripts/check.js` both use it, so change checks there, not in one place only.
 - `index.html` holds the editor. It loads `grader.js` and `questions/*.json`, so serve the folder (`npx serve .`) to try it.
 - After any change, `node scripts/check.js` must pass for every question. Add an example that covers the new behaviour.

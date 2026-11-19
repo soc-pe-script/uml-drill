@@ -12,6 +12,10 @@ npx serve .            # or: python3 -m http.server
 
 Open the address it prints. Opening `index.html` straight from disk won't work, because the page loads `questions/*.json`.
 
+## Write questions
+
+Press **Author** in the app to create or edit a question: draw the model answer, generate the answer key from it, mark accepted alternatives, save wrong answers as test examples, and download the file. See [CONTRIBUTING.md](CONTRIBUTING.md).
+
 ## Check the questions
 
 ```sh
@@ -27,6 +31,7 @@ This checks that each model answer grades with 0 errors and that each example mi
 | --- | --- |
 | `index.html` | The editor and quiz UI |
 | `grader.js` | The grader (no DOM, runs in Node and the browser) |
+| `author.js` | Key generation, example patches and question checks, shared by author mode and `check.js` |
 | `questions/` | One JSON file per question, listed in `index.json` |
 | `scripts/check.js` | Validates questions |
 

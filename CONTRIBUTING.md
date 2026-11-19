@@ -2,7 +2,20 @@
 
 Each question is one JSON file in `questions/`. You don't need to touch any code.
 
-## Quick start
+## Quick start (in the app)
+
+1. Open the app and press **Author**.
+2. Press **New question**, or **Import file…** to edit an existing question file.
+3. Fill in the title, code and prompt under **Question** and **Part**.
+4. Draw the correct diagram on the canvas and press **Save canvas as model**.
+5. Press **Generate from model answer**. Every box, member and line becomes required, except constructors and dependencies.
+6. In **Answer key**, mark what else is accepted: optional items, other line types, blank multiplicities, alternative types.
+7. Draw at least three common wrong answers and press **Save canvas as example** for each.
+8. When **Checks** shows all passing, press **Download**. Put the file in `questions/`, add its name to `questions/index.json`, run `node scripts/check.js`, and open a pull request.
+
+Edits are kept in your browser until you download them. **Discard my changes** restores a question from the repo.
+
+## Quick start (by hand)
 
 1. Fork the repo and clone your fork.
 2. Copy `questions/_template.json` to `questions/<your-id>.json`. Use lowercase letters, digits and dashes for the id, and make the file name match it.
@@ -50,7 +63,7 @@ Node 18 or newer is the only requirement. There are no dependencies to install.
 }
 ```
 
-**Tip:** don't write `starter` or `model` by hand. Draw it in the app, press **Import / export**, copy the JSON, and paste it in.
+**Tip:** don't write `starter` or `model` by hand. Draw it in the app and use **Author → Save canvas as model / starter**, or **Diagram JSON** to copy one diagram.
 
 ### Key for a class diagram
 
@@ -201,6 +214,8 @@ Each part should have at least three `examples`. Each one patches the model answ
   }
 }
 ```
+
+An example can also hold a full `"diagram"` instead of a `"patch"`; author mode does this when a patch can't describe the change.
 
 `node scripts/check.js` fails if the model answer has any error, or if an example's count differs. Run it with `-v` to see every message.
 

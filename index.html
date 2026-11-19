@@ -74,10 +74,10 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .btn[disabled] { opacity: .5; cursor: default; }
 
 /* main grid */
-.layout { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(260px, 320px) minmax(0, 1fr) 300px; }
+.layout { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(260px, 320px) minmax(0, 1fr) 300px; grid-template-rows: minmax(0, 1fr); }
 .pane { min-width: 0; min-height: 0; overflow: auto; }
 .qpane { border-right: 1px solid var(--rule); background: var(--panel); padding: 18px 18px 28px; }
-.side { border-left: 1px solid var(--rule); background: var(--panel); display: flex; flex-direction: column; }
+.side { border-left: 1px solid var(--rule); background: var(--panel); display: flex; flex-direction: column; min-height: 0; }
 
 .qpane h1 { font: 700 22px/1.15 var(--f-display); margin: 0 0 4px; text-wrap: balance; }
 .source { color: var(--ink-2); font-size: 12px; margin: 0 0 14px; }
@@ -162,6 +162,53 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .fr-tag, .fr-else, .fr-end { cursor: pointer; }
 .sq-frame.sel .fr-box, .sq-frame.sel .fr-tagbg, .fr-else.sel .fr-div { stroke: var(--accent); stroke-width: 2; }
 .sq-frame.hl .fr-box, .fr-else.hl .fr-div { stroke: var(--err); stroke-width: 2.2; }
+/* author mode */
+.app.authoring .layout { grid-template-columns: minmax(240px, 300px) minmax(0, 1fr) 420px; }
+.btn[aria-pressed="true"] { background: var(--ink); color: var(--panel); border-color: var(--ink); }
+.a-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+.chip { font: 600 11px/1 var(--f-mono); padding: 5px 8px; border-radius: 999px; background: var(--sunk); color: var(--ink-2); }
+.chip.warn { background: var(--note-soft); color: var(--note); }
+.qtab .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--note); display: inline-block; }
+.a-summary { font-size: 12px; font-weight: 600; margin-left: auto; }
+.a-summary.ok, .a-good, .a-ok { color: var(--ok); }
+.a-summary.bad, .a-bad, .a-err { color: var(--err); }
+.a-err { font-size: 12.5px; margin: 4px 0; }
+.a-top { margin-bottom: 6px; }
+.a-hint { font-size: 12.5px; color: var(--ink-2); margin: 0 0 10px; }
+.a-sec { border-top: 1px solid var(--rule); }
+.a-sec > summary { cursor: pointer; padding: 10px 0; font: 600 14px/1.2 var(--f-display); list-style-position: outside; }
+.a-sec > summary .muted { font: 500 12px var(--f-mono); }
+.a-body { padding-bottom: 12px; }
+.a-card { border: 1px solid var(--rule); border-radius: 8px; padding: 8px 10px; margin-bottom: 8px; min-width: 0; }
+details.a-card > summary { cursor: pointer; }
+details.a-card[open] > summary { margin-bottom: 8px; }
+.a-cardhead { display: flex; gap: 8px; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.a-cardhead input { flex: 1; min-width: 0; border: 1px solid var(--rule); background: var(--paper); border-radius: 6px; padding: 4px 8px; }
+.a-code { width: 100%; font: 12px/1.45 var(--f-mono); border: 1px solid var(--rule); background: var(--paper); border-radius: 6px; padding: 6px 8px; resize: vertical; }
+.a-mem { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; padding: 5px 0; border-bottom: 1px dashed var(--rule); }
+.a-mem:last-child { border-bottom: 0; }
+.a-mem code { font-size: 12px; word-break: break-all; }
+.a-mem .check { margin: 0; }
+.a-inline { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ink-2); }
+.a-inline input { border: 1px solid var(--rule); background: var(--paper); border-radius: 6px; padding: 3px 6px; font: 12px var(--f-mono); color: var(--ink); width: 9.5em; }
+.a-inline input.a-num { width: 4.5em; }
+.a-chips { display: flex; flex-wrap: wrap; gap: 0 12px; margin-bottom: 10px; }
+.a-chips .check { margin-bottom: 2px; }
+.a-req { align-self: end; margin-bottom: 18px; }
+.a-node { margin-left: calc(var(--d) * 12px); border-left: 2px solid var(--rule); padding-left: 8px; }
+.a-dia { display: flex; flex-direction: column; gap: 6px; padding: 8px 0; border-bottom: 1px dashed var(--rule); }
+.a-dia > div:first-child { display: flex; gap: 8px; align-items: baseline; justify-content: space-between; }
+.a-list { list-style: none; padding: 0; margin: 6px 0; display: flex; flex-direction: column; gap: 6px; }
+.a-list > li { border: 1px solid var(--rule); border-radius: 6px; padding: 7px 9px; font-size: 13px; }
+.a-list > li.bad { border-color: var(--err); background: var(--err-soft); }
+.a-list .actions { margin-top: 6px; }
+.a-sub { font-size: 12px; color: var(--ink-2); margin-top: 3px; }
+.a-exrow { display: flex; gap: 8px; align-items: center; }
+.a-exrow input { flex: 1; min-width: 0; border: 1px solid var(--rule); background: var(--paper); border-radius: 6px; padding: 4px 7px; }
+.a-exp { font: 12px var(--f-mono); color: var(--ink-2); white-space: nowrap; }
+.a-st { width: 1em; text-align: center; font-weight: 700; }
+.a-passed summary { cursor: pointer; font-size: 12.5px; color: var(--ink-2); }
+.actions select, .actions input { border: 1px solid var(--rule); background: var(--paper); border-radius: 6px; padding: 4px 7px; }
 .ghost { position: fixed; pointer-events: none; z-index: 20; background: var(--panel); border: 1.5px dashed var(--accent); border-radius: 4px; padding: 6px 12px; font: 12px var(--f-mono); }
 
 /* side panel */
@@ -208,14 +255,15 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .loaderr { padding: 24px; max-width: 60ch; }
 
 @media (max-width: 1180px) {
-  .layout { grid-template-columns: minmax(0, 1fr) 300px; grid-template-rows: auto minmax(0, 1fr); }
+  .layout, .app.authoring .layout { grid-template-columns: minmax(0, 1fr) 300px; grid-template-rows: auto minmax(0, 1fr); }
+  .app.authoring .layout { grid-template-columns: minmax(0, 1fr) 380px; }
   .qpane { grid-column: 1 / 3; border-right: 0; border-bottom: 1px solid var(--rule); max-height: 34vh; }
 }
 @media (max-width: 760px) {
   .app { height: auto; }
   .qtabs { order: 3; flex-basis: 100%; }
   .brand { flex: 1; }
-  .layout { display: flex; flex-direction: column; }
+  .layout, .app.authoring .layout { display: flex; flex-direction: column; }
   .qpane { max-height: none; }
   .work { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto auto; }
   .toolbox { flex-direction: row; overflow-x: auto; border-right: 0; border-bottom: 1px solid var(--rule); padding: 8px; }
@@ -233,7 +281,8 @@ button, input, select, textarea { font: inherit; color: inherit; }
   <header class="top">
     <div class="brand">UML Drill <small>CS2103T</small></div>
     <nav class="qtabs" id="qtabs" aria-label="Questions"></nav>
-    <button class="btn" id="btnIO" type="button">Import / export</button>
+    <button class="btn" id="btnAuthor" type="button" aria-pressed="false" title="Create and edit questions and answer keys">Author</button>
+    <button class="btn" id="btnIO" type="button">Diagram JSON</button>
   </header>
   <main class="layout" id="layout">
     <section class="pane qpane" id="qpane" aria-label="Question"></section>
@@ -255,17 +304,20 @@ button, input, select, textarea { font: inherit; color: inherit; }
       <div class="tabs" role="tablist">
         <button role="tab" id="tabEdit" aria-selected="true" type="button">Edit</button>
         <button role="tab" id="tabResults" aria-selected="false" type="button">Results</button>
+        <button role="tab" id="tabAuthor" aria-selected="false" type="button" hidden>Author</button>
       </div>
       <div class="tabpanel" id="inspector"></div>
       <div class="tabpanel" id="results" hidden></div>
+      <div class="tabpanel" id="author" hidden></div>
+      <input type="file" id="aFile" accept=".json,application/json" multiple hidden>
     </aside>
   </main>
 </div>
 
 <div class="modal" id="ioModal" hidden>
   <div class="card" role="dialog" aria-modal="true" aria-labelledby="ioTitle">
-    <h3 id="ioTitle" style="margin-top:0">Import / export this diagram</h3>
-    <p class="muted" style="margin-top:0">The JSON is what the grader reads. Question authors paste it into a question file as the <code>model</code> or <code>starter</code>.</p>
+    <h3 id="ioTitle" style="margin-top:0">Diagram JSON</h3>
+    <p class="muted" style="margin-top:0">The diagram on the canvas as JSON. Use it to save or share one attempt. To edit questions and answer keys, use <strong>Author</strong>.</p>
     <textarea id="ioText" spellcheck="false" aria-label="Diagram JSON"></textarea>
     <div class="actions" style="margin-top:10px">
       <button class="btn" id="ioCopy" type="button">Copy JSON</button>
@@ -279,6 +331,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 </div>
 
 <script src="grader.js"></script>
+<script src="author.js"></script>
 <script>
 (() => {
 'use strict';
@@ -1223,7 +1276,7 @@ function renderStatus() {
 // ---------------- inspector ----------------
 function select(sel) {
   S.sel = sel;
-  setSide('edit');
+  if (!(S.side === 'author' && !sel)) setSide('edit');
   renderCanvas();
   renderInspector();
 }
@@ -1335,8 +1388,10 @@ function setSide(which) {
   S.side = which;
   $('#tabEdit').setAttribute('aria-selected', which === 'edit');
   $('#tabResults').setAttribute('aria-selected', which === 'results');
+  $('#tabAuthor').setAttribute('aria-selected', which === 'author');
   $('#inspector').hidden = which !== 'edit';
   $('#results').hidden = which !== 'results';
+  $('#author').hidden = which !== 'author';
 }
 $('#tabEdit').onclick = () => setSide('edit');
 $('#tabResults').onclick = () => { setSide('results'); renderResults(); };
@@ -1508,6 +1563,7 @@ $('#ioLoad').onclick = () => {
 };
 
 function toast(msg) {
+  document.querySelectorAll('.toast').forEach((x) => x.remove());
   const t = document.createElement('div');
   t.className = 'toast'; t.setAttribute('role', 'status'); t.textContent = msg;
   document.body.appendChild(t);
@@ -1537,7 +1593,8 @@ function renderTabs() {
   $('#qtabs').innerHTML = S.parts.map((P, i) => {
     const r = S.results[P.key];
     const badge = r ? `<span class="badge ${r.errors ? 'bad' : 'ok'}">${r.errors ? r.errors + ' err' : '✓'}</span>` : '';
-    return `<button class="qtab" type="button" role="tab" data-i="${i}" aria-selected="${i === S.cur}" title="${esc(P.q.title)}">${esc(P.label)}${badge}</button>`;
+    const dot = A.local[P.q.id] ? '<span class="dot" aria-label="edited in this browser"></span>' : '';
+    return `<button class="qtab" type="button" role="tab" data-i="${i}" aria-selected="${i === S.cur}" title="${esc(P.q.title)}${dot ? ' (edited in this browser)' : ''}">${esc(P.label)}${dot}${badge}</button>`;
   }).join('');
   $('#qtabs').querySelectorAll('.qtab').forEach((b) => { b.onclick = () => goTo(+b.dataset.i); });
 }
@@ -1551,6 +1608,658 @@ function goTo(i) {
 function renderAll() {
   renderQuestion(); renderStatus(); renderCanvas(); renderInspector();
   if (S.side === 'results') renderResults();
+  if (S.side === 'author') renderAuthor();
+}
+
+// ================= author mode =================
+// Questions edited or created here live in this browser (localStorage) until downloaded.
+const A = { builtin: {}, local: {}, order: [], armed: null, armTimer: null, open: new Set(['a-dia', 'a-key', 'a-ex', 'a-check']), jsonOpen: false, jsonErr: '', msg: '', check: null };
+const LOCAL_KEY = 'local';
+function loadLocal() {
+  const v = store.get(LOCAL_KEY);
+  if (v && v.items) { A.local = v.items; A.order = (v.order || Object.keys(v.items)).filter((id) => v.items[id]); }
+}
+function persistLocal() { store.set(LOCAL_KEY, { order: A.order, items: A.local }); }
+const isEdited = (q) => !!A.local[q.id];
+const isBuiltin = (q) => !!A.builtin[q.id];
+function commitQ(q) {
+  const first = !A.local[q.id];
+  if (first) A.order.push(q.id);
+  A.local[q.id] = q;
+  persistLocal();
+  A.check = null;
+  if (first) { renderTabs(); const c = $('#aChip'); if (c) { c.textContent = isBuiltin(q) ? 'Edited in this browser' : 'New, only in this browser'; c.classList.add('warn'); } }
+  clearTimeout(A.sumTimer);
+  A.sumTimer = setTimeout(renderCheckSummary, 250);
+}
+function rebuildParts(focusPart) {
+  const keep = focusPart || (curPart() && curPart().p);
+  S.parts = [];
+  S.questions.forEach((q, qi) => q.parts.forEach((p) => {
+    const key = `${q.id}/${p.id}`;
+    S.parts.push({ q, p, key, label: `Q${qi + 1} (${p.id})` });
+    if (!S.diagrams[key]) S.diagrams[key] = store.get(key) || emptyFor(p);
+  }));
+  const i = S.parts.findIndex((P) => P.p === keep);
+  S.cur = i >= 0 ? i : Math.min(S.cur, Math.max(0, S.parts.length - 1));
+}
+
+function setAuthor(on) {
+  S.author = on;
+  try { localStorage.setItem('umldrill.v1.author', on ? '1' : ''); } catch {}
+  $('#app').classList.toggle('authoring', on);
+  $('#btnAuthor').setAttribute('aria-pressed', on);
+  $('#tabAuthor').hidden = !on;
+  if (on) { setSide('author'); renderAuthor(); }
+  else if (S.side === 'author') setSide('edit');
+  if (S.zoom === 'fit') renderCanvas();
+}
+$('#btnAuthor').onclick = () => setAuthor(!S.author);
+$('#tabAuthor').onclick = () => { setSide('author'); renderAuthor(); };
+
+// ---- two-click confirm for destructive buttons ----
+function armed(act, btn, label) {
+  if (A.armed === act) { clearTimeout(A.armTimer); A.armed = null; return true; }
+  A.armed = act;
+  btn.textContent = label || 'Click again to confirm';
+  btn.classList.add('danger');
+  clearTimeout(A.armTimer);
+  A.armTimer = setTimeout(() => { A.armed = null; renderAuthor(); }, 3000);
+  return false;
+}
+const isEmptyDiagram = (d) => !d || (d.rows ? !d.lifelines.length && !d.rows.length : !d.nodes.length && !d.edges.length);
+const diagramSize = (d) => (!d ? 'empty' : d.rows ? `${d.lifelines.length} lifelines, ${d.rows.length} rows` : `${d.nodes.length} boxes, ${d.edges.length} lines`);
+
+// ---- files ----
+async function offerDownload(filename, text) {
+  if (window.claude && typeof window.claude.use === 'function') {
+    let dl = null;
+    try { dl = await window.claude.use('downloads'); } catch {}
+    if (dl) {
+      try { await dl.save({ filename, data: text }); toast(`Saved ${filename}.`); }
+      catch (e) {
+        if (e && e.code === 'declined') return;
+        if (e && e.code === 'rate_limited') { toast('A save prompt is already open.'); return; }
+        await copyText(text, `Saving isn't available here, so the JSON was copied instead.`);
+      }
+      return;
+    }
+    await copyText(text, `Saving isn't available here, so the JSON was copied instead.`);
+    return;
+  }
+  const url = URL.createObjectURL(new Blob([text], { type: 'application/json' }));
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+async function copyText(text, okMsg) {
+  try { await navigator.clipboard.writeText(text); toast(okMsg || 'Copied.'); }
+  catch { openIOWith(text, 'Copy is blocked here. Select the text and copy it yourself.'); }
+}
+function openIOWith(text, msg) {
+  $('#ioText').value = text;
+  $('#ioMsg').textContent = msg || '';
+  $('#ioModal').hidden = false;
+  $('#ioText').focus(); $('#ioText').select();
+}
+const qJSON = (q) => JSON.stringify(q, null, 2) + '\n';
+
+function importQuestions(list, origin) {
+  const added = [];
+  const errs = [];
+  for (const q of list) {
+    if (!q || typeof q !== 'object' || typeof q.id !== 'string' || !/^[a-z0-9-]+$/.test(q.id) || !Array.isArray(q.parts) || !q.parts.length) { errs.push('a file is not a UML Drill question (needs an id and parts)'); continue; }
+    const bad = q.parts.find((p) => !['class', 'object', 'sequence'].includes(p.mode));
+    if (bad) { errs.push(`${q.id}: part ${bad.id} has an unknown mode`); continue; }
+    q.parts.forEach((p) => {
+      p.model = p.model || UMLAuthor.emptyDiagram(p.mode);
+      p.key = p.key || UMLAuthor.emptyKey(p.mode);
+      p.examples = p.examples || [];
+    });
+    q.code = Array.isArray(q.code) ? q.code : [];
+    const i = S.questions.findIndex((x) => x.id === q.id);
+    if (i >= 0) {
+      S.questions[i] = q;
+      q.parts.forEach((p) => { const k = `${q.id}/${p.id}`; delete S.diagrams[k]; delete S.results[k]; });
+    } else S.questions.push(q);
+    commitQ(q);
+    added.push(q);
+  }
+  if (added.length) {
+    rebuildParts(added[0].parts[0]);
+    goTo(S.cur);
+    if (S.author) { setSide('author'); renderAuthor(); }
+  }
+  if (errs.length) toast(errs[0]);
+  else if (added.length) toast(`Imported ${added.length} question${added.length === 1 ? '' : 's'}${origin ? ' from ' + origin : ''}.`);
+}
+$('#aFile').addEventListener('change', async (e) => {
+  const files = [...e.target.files];
+  e.target.value = '';
+  const list = [];
+  for (const f of files) {
+    try {
+      const v = JSON.parse(await f.text());
+      if (Array.isArray(v)) list.push(...v);
+      else if (v && Array.isArray(v.questions) && typeof v.questions[0] === 'object') list.push(...v.questions);
+      else list.push(v);
+    } catch (err) { toast(`${f.name} is not valid JSON.`); return; }
+  }
+  importQuestions(list, files.length === 1 ? files[0].name : '');
+});
+
+function newQuestion() {
+  let id = 'new-question', n = 2;
+  while (S.questions.some((q) => q.id === id)) id = `new-question-${n++}`;
+  const q = UMLAuthor.blankQuestion(id);
+  A.open.add('a-q'); A.open.add('a-dia');
+  S.questions.push(q);
+  commitQ(q);
+  rebuildParts(q.parts[0]);
+  goTo(S.cur);
+  setSide('author'); renderAuthor();
+}
+
+// ---- path-bound inputs ----
+const getAt = (root, path) => path.reduce((o, k) => (o == null ? o : o[k]), root);
+function rootObj(r) { const P = curPart(); return r === 'q' ? P.q : r === 'p' ? P.p : P.p.key; }
+const bind = (root, path, f, t, extra = '') => `data-root="${root}" data-path="${esc(JSON.stringify(path))}" data-f="${esc(f)}" data-t="${t}" ${extra}`;
+const listVal = (arr) => esc((arr || []).filter((v) => v !== '').join(', '));
+
+function onBound(e) {
+  const t = e.target;
+  if (!t.dataset || !t.dataset.f) return;
+  const isToggle = t.type === 'checkbox' || t.tagName === 'SELECT';
+  if ((e.type === 'change') !== isToggle) return;
+  const P = curPart();
+  const obj = getAt(rootObj(t.dataset.root), JSON.parse(t.dataset.path || '[]'));
+  if (!obj) return;
+  const f = t.dataset.f;
+  switch (t.dataset.t) {
+    case 'text': if (t.dataset.opt !== undefined && !t.value.trim()) delete obj[f]; else obj[f] = t.value; break;
+    case 'num': if (t.value === '') delete obj[f]; else obj[f] = Math.max(0, parseInt(t.value, 10) || 0); break;
+    case 'list': {
+      const hadBlank = (obj[f] || []).includes('');
+      const vals = t.value.split(',').map((s) => s.trim()).filter(Boolean);
+      const out = hadBlank ? [''].concat(vals) : vals;
+      if (out.length) obj[f] = out; else delete obj[f];
+      break;
+    }
+    case 'blank': {
+      let arr = (obj[f] || []).filter((v) => v !== '');
+      if (t.checked) arr = [''].concat(arr);
+      if (arr.length) obj[f] = arr; else delete obj[f];
+      break;
+    }
+    case 'bool': if (t.checked) obj[f] = true; else delete obj[f]; break;
+    case 'negbool': if (!t.checked) obj[f] = true; else delete obj[f]; break;
+    case 'member': {
+      let arr = (obj[f] || []).filter((v) => v !== t.dataset.v);
+      if (t.checked) arr.push(t.dataset.v);
+      if (arr.length) obj[f] = arr; else delete obj[f];
+      break;
+    }
+    case 'sel': if (t.value === '' && t.dataset.opt !== undefined) delete obj[f]; else obj[f] = t.value; break;
+    case 'tags': obj[f] = t.value.split(',').map((s) => s.trim()).filter(Boolean); break;
+  }
+  commitQ(P.q);
+  if (t.dataset.root !== 'k') { renderQuestion(); renderTabs(); }
+  if (t.dataset.rerender !== undefined) renderAuthor();
+}
+$('#author').addEventListener('input', onBound);
+$('#author').addEventListener('change', onBound);
+
+// ---- render ----
+function sec(id, title, body, extra = '') {
+  return `<details class="a-sec" data-sec="${id}" ${A.open.has(id) ? 'open' : ''}><summary>${title}${extra}</summary><div class="a-body">${body}</div></details>`;
+}
+function renderAuthor() {
+  const box = $('#author');
+  if (!S.author || !curPart()) { box.innerHTML = ''; return; }
+  const P = curPart();
+  const q = P.q, p = P.p;
+  const scrollTop = box.scrollTop;
+  const status = isBuiltin(q) ? (isEdited(q) ? 'Edited in this browser' : 'From the repo') : 'New, only in this browser';
+  const head = `
+    <div class="a-head">
+      <span class="chip ${isEdited(q) ? 'warn' : ''}" id="aChip">${esc(status)}</span>
+      <span id="aSummary" class="a-summary"></span>
+    </div>
+    <div class="actions a-top">
+      <button class="btn small primary" data-act="download" type="button">Download ${esc(q.id)}.json</button>
+      <button class="btn small" data-act="copyq" type="button">Copy JSON</button>
+      <button class="btn small" data-act="import" type="button">Import file…</button>
+      <button class="btn small" data-act="new" type="button">New question</button>
+      ${isBuiltin(q) && isEdited(q) ? `<button class="btn small" data-act="discard" type="button">Discard my changes</button>` : ''}
+      ${!isBuiltin(q) ? `<button class="btn small" data-act="delq" type="button">Delete question</button>` : ''}
+    </div>
+    <p class="a-hint">Edits stay in this browser until you download the file. To publish, put it in <code>questions/</code> and list it in <code>questions/index.json</code>.</p>`;
+
+  const details = `
+    <label class="field"><span>Title</span><input ${bind('q', [], 'title', 'text')} value="${esc(q.title)}"></label>
+    <label class="field"><span>Id (file name)</span><input id="aId" class="mono" value="${esc(q.id)}" ${isBuiltin(q) ? 'disabled' : ''} autocomplete="off" spellcheck="false"></label>
+    ${isBuiltin(q) ? '<p class="a-hint" style="margin-top:-6px">Ids of questions from the repo are fixed here. Rename the file in the repo instead.</p>' : ''}
+    <label class="field"><span>Source</span><input ${bind('q', [], 'source', 'text')} value="${esc(q.source)}"></label>
+    <div class="row2">
+      <label class="field"><span>Author</span><input ${bind('q', [], 'author', 'text')} value="${esc(q.author || '')}"></label>
+      <label class="field"><span>Tags (comma)</span><input ${bind('q', [], 'tags', 'tags')} value="${esc((q.tags || []).join(', '))}"></label>
+    </div>
+    <div class="fieldlabel">Code files</div>
+    ${q.code.map((c, i) => `
+      <div class="a-card">
+        <div class="a-cardhead"><input class="mono" ${bind('q', ['code', i], 'file', 'text')} value="${esc(c.file)}" aria-label="File name"><button class="btn small" data-act="delcode" data-i="${i}" type="button" aria-label="Remove file">✕</button></div>
+        <textarea class="a-code" rows="${Math.min(14, Math.max(4, c.text.split('\n').length + 1))}" ${bind('q', ['code', i], 'text', 'text')} spellcheck="false" aria-label="Code">${esc(c.text)}</textarea>
+      </div>`).join('')}
+    <button class="btn small" data-act="addcode" type="button">Add code file</button>`;
+
+  const otherParts = q.parts.length;
+  const part = `
+    <label class="field"><span>Prompt</span><textarea rows="3" ${bind('p', [], 'prompt', 'text')}>${esc(p.prompt)}</textarea></label>
+    <label class="field"><span>Diagram type</span><select id="aMode"><option value="class">Class diagram</option><option value="object">Object diagram</option><option value="sequence">Sequence diagram</option></select></label>
+    <p class="a-hint" style="margin-top:-6px">Changing the type clears this part's starter, model answer, key and examples.</p>
+    <div class="actions">
+      <select id="aNewMode" aria-label="Type of new part"><option value="class">Class</option><option value="object">Object</option><option value="sequence">Sequence</option></select>
+      <button class="btn small" data-act="addpart" type="button">Add part</button>
+      ${otherParts > 1 ? `<button class="btn small" data-act="delpart" type="button">Delete part (${esc(p.id)})</button>` : ''}
+    </div>`;
+
+  const diagrams = `
+    <p class="a-hint">Draw on the canvas, then save it here. Students start from the starter; the model answer is shown after grading.</p>
+    <div class="a-dia">
+      <div><b>Model answer</b><span class="muted">${diagramSize(p.model)}</span></div>
+      <div class="actions"><button class="btn small primary" data-act="setmodel" type="button">Save canvas as model</button><button class="btn small" data-act="editmodel" type="button">Put model on canvas</button></div>
+    </div>
+    <div class="a-dia">
+      <div><b>Starter layout</b><span class="muted">${diagramSize(p.starter)}</span></div>
+      <div class="actions"><button class="btn small" data-act="setstarter" type="button">Save canvas as starter</button><button class="btn small" data-act="editstarter" type="button">Put starter on canvas</button><button class="btn small" data-act="clearstarter" type="button">Clear</button></div>
+    </div>`;
+
+  const key = `
+    <div class="actions" style="margin-bottom:8px">
+      <button class="btn small primary" data-act="genkey" type="button">Generate from model answer</button>
+      <button class="btn small" data-act="jsonkey" type="button">${A.jsonOpen ? 'Use the form' : 'Edit as JSON'}</button>
+    </div>
+    <p class="a-hint">The generator makes every box, member and line in the model required, except constructors and dependencies. Then mark what else is accepted.</p>
+    ${A.jsonOpen ? `
+      <textarea id="aKeyJson" class="a-code" rows="18" spellcheck="false" aria-label="Key JSON">${esc(JSON.stringify(p.key, null, 2))}</textarea>
+      <div class="actions" style="margin-top:6px"><button class="btn small primary" data-act="applyjson" type="button">Apply JSON</button></div>
+      ${A.jsonErr ? `<p class="a-err">${esc(A.jsonErr)}</p>` : ''}` : keyForm(p)}`;
+
+  const exNameDefault = `Mistake ${(p.examples || []).length + 1}`;
+  const examples = `
+    <p class="a-hint">Draw a typical wrong answer on the canvas, then save it as an example. The current error and note counts become the expected result, so later key edits that change them show up as failed checks.</p>
+    <div class="actions"><input id="aExName" value="${esc(exNameDefault)}" aria-label="Example name" style="flex:1;min-width:0"><button class="btn small primary" data-act="addex" type="button">Save canvas as example</button></div>
+    <div id="aExList">${examplesHTML(q, p)}</div>`;
+
+  const checks = `<div id="aChecks">${checksHTML(q)}</div>`;
+  const chk = runChecks(q);
+
+  box.innerHTML = head
+    + sec('a-q', 'Question', details)
+    + sec('a-part', `Part (${esc(p.id)})`, part)
+    + sec('a-dia', 'Model answer and starter', diagrams)
+    + sec('a-key', 'Answer key', key)
+    + sec('a-ex', 'Examples', examples, ` <span class="muted">${(p.examples || []).length}</span>`)
+    + sec('a-check', 'Checks', checks, ` <span id="aCheckBadge">${checkBadge(chk)}</span>`);
+  $('#aMode').value = p.mode;
+  box.scrollTop = scrollTop;
+  renderCheckSummary();
+}
+const checkBadge = (chk) => (chk.problems.length ? `<span class="a-bad">${chk.problems.length}</span>` : '<span class="a-good">✓</span>');
+function examplesHTML(q, p) {
+  const exStatus = exampleStatus(q, p);
+  return `<ul class="a-list">${(p.examples || []).map((ex, i) => {
+      const st = exStatus[ex.name];
+      const x = ex.expect || {};
+      const exp = [x.errors !== undefined ? `${x.errors} err` : x.errorsAtLeast !== undefined ? `≥${x.errorsAtLeast} err` : '', x.notes !== undefined ? `${x.notes} notes` : ''].filter(Boolean).join(' · ');
+      return `<li class="${st && !st.ok ? 'bad' : ''}">
+        <div class="a-exrow"><input ${bind('p', ['examples', i], 'name', 'text')} value="${esc(ex.name)}" aria-label="Example name"><span class="a-exp">${esc(exp)}</span><span class="a-st">${st ? (st.ok ? '✓' : '✗') : ''}</span></div>
+        ${st && !st.ok ? `<div class="a-err">${esc(st.msg)}</div>` : ''}
+        <div class="actions"><button class="btn small" data-act="loadex" data-i="${i}" type="button">Put on canvas</button>${st && !st.ok && !st.thrown ? `<button class="btn small" data-act="acceptex" data-i="${i}" type="button">Accept new counts</button>` : ''}<button class="btn small" data-act="delex" data-i="${i}" type="button">Delete</button></div>
+      </li>`;
+    }).join('') || '<li class="muted">No examples yet.</li>'}</ul>`;
+}
+function checksHTML(q) {
+  const chk = runChecks(q);
+  return `
+    ${chk.problems.length ? `<ul class="a-list">${chk.problems.map((pr) => `<li class="bad"><b>${esc(pr.where)}</b><div>${esc(pr.msg)}</div>${(pr.issues || []).filter((i) => i.sev === 'error').slice(0, 6).map((i) => `<div class="a-sub">${esc(i.where)}: ${esc(i.msg)}</div>`).join('')}</li>`).join('')}</ul>` : '<p class="a-ok">All checks pass. The file will pass <code>node scripts/check.js</code>.</p>'}
+    <details class="a-passed"><summary>${chk.passed.length} passing</summary><ul class="a-list">${chk.passed.map((pr) => `<li><b>${esc(pr.where)}</b> <span class="muted">${esc(pr.msg)}</span></li>`).join('')}</ul></details>`;
+}
+
+function runChecks(q) {
+  if (!A.check || A.check.q !== q) A.check = { q, res: UMLAuthor.checkQuestion(q) };
+  return A.check.res;
+}
+function renderCheckSummary() {
+  const el = $('#aSummary');
+  if (!el || !curPart()) return;
+  const r = runChecks(curPart().q);
+  el.className = 'a-summary ' + (r.problems.length ? 'bad' : 'ok');
+  el.textContent = r.problems.length ? `${r.problems.length} check${r.problems.length === 1 ? '' : 's'} failing` : 'All checks pass';
+  const P = curPart();
+  const swap = (id, html) => { const c = $(id); if (c && !c.contains(document.activeElement)) c.innerHTML = html; };
+  swap('#aExList', examplesHTML(P.q, P.p));
+  swap('#aChecks', checksHTML(P.q));
+  const bdg = $('#aCheckBadge'); if (bdg) bdg.innerHTML = checkBadge(r);
+}
+function exampleStatus(q, p) {
+  const out = {};
+  const r = runChecks(q);
+  const pre = `part ${p.id} example "`;
+  r.passed.forEach((x) => { if (x.where.startsWith(pre)) out[x.where.slice(pre.length, -1)] = { ok: true }; });
+  r.problems.forEach((x) => { if (x.where.startsWith(pre)) out[x.where.slice(pre.length, -1)] = { ok: false, msg: x.msg, thrown: !/expected/.test(x.msg) }; });
+  return out;
+}
+
+// ---- key forms ----
+const ALL_TYPES = ['association', 'composition', 'aggregation', 'dependency', 'inheritance', 'realization'];
+function sigText(s, ctor) {
+  if (s.params) return `${s.vis || ''}${s.name}(${s.params.map((x) => (x.name ? x.name + ': ' : '') + x.type).join(', ')})${s.ret ? ': ' + s.ret : ''}${s.abstract ? ' {abstract}' : ''}${s.static ? ' {static}' : ''}`;
+  return `${s.vis || ''}${s.name}${s.type ? ': ' + [].concat(s.type)[0] : ''}${s.static ? ' {static}' : ''}`;
+}
+function keyForm(p) {
+  if (p.mode === 'object') return objectKeyForm(p.key);
+  if (p.mode === 'sequence') return seqKeyForm(p.key);
+  return classKeyForm(p.key);
+}
+function classKeyForm(k) {
+  const classes = Object.entries(k.classes || {});
+  if (!classes.length) return '<p class="muted">No classes yet. Save a model answer, then generate the key.</p>';
+  const cls = classes.map(([name, c]) => {
+    const st = c.stereo || '';
+    let members = '';
+    if (st === 'enumeration') {
+      members = `<label class="field"><span>Values (comma)</span><input class="mono" ${bind('k', ['classes', name], 'values', 'list')} value="${listVal(c.values)}"></label>`;
+    } else {
+      const row = (arr, i, s, opt, isAttr) => `
+        <div class="a-mem">
+          <code>${esc(sigText(s))}</code>
+          <label class="check"><input type="checkbox" data-act="memopt" data-cls="${esc(name)}" data-arr="${arr}" data-i="${i}" ${opt ? '' : 'checked'}> Required</label>
+          ${isAttr ? `<label class="a-inline"><span>Types</span><input class="mono" ${bind('k', ['classes', name, arr, i], 'type', 'list')} value="${listVal(s.type)}" title="Accepted types, comma separated"></label>` : ''}
+        </div>`;
+      members = ['attrs', 'optionalAttrs', 'methods', 'optionalMethods'].map((arr) => (c[arr] || []).map((s, i) => row(arr, i, s, arr.startsWith('optional'), arr.endsWith('ttrs'))).join('')).join('')
+        || '<p class="muted">No members.</p>';
+    }
+    return `<details class="a-card" data-sec="cls-${esc(name)}" ${A.open.has('cls-' + name) ? 'open' : ''}><summary><code>${esc(name)}</code> <span class="muted">${esc(st || 'class')}</span></summary>
+      <label class="field"><span>Kind</span><select ${bind('k', ['classes', name], 'stereo', 'sel', 'data-opt data-rerender')}>
+        ${['', 'interface', 'abstract', 'enumeration'].map((v) => `<option value="${v}" ${v === st ? 'selected' : ''}>${v || 'class'}</option>`).join('')}</select></label>
+      ${members}</details>`;
+  }).join('');
+  const rels = (k.relations || []).map((r, i) => {
+    const path = ['relations', i];
+    const assoc = ['association', 'composition', 'aggregation'].includes(r.type);
+    const others = ALL_TYPES.filter((t) => t !== r.type);
+    return `<div class="a-card">
+      <div class="a-cardhead"><code>${esc(r.from)} → ${esc(r.to)}</code><button class="btn small" data-act="delrel" data-i="${i}" type="button" aria-label="Delete relationship">✕</button></div>
+      <div class="row2">
+        <label class="field"><span>Kind</span><select ${bind('k', path, 'type', 'sel', 'data-rerender')}>${ALL_TYPES.map((t) => `<option ${t === r.type ? 'selected' : ''}>${t}</option>`).join('')}</select></label>
+        <label class="check a-req"><input type="checkbox" ${bind('k', path, 'optional', 'negbool')} ${r.optional ? '' : 'checked'}> Required</label>
+      </div>
+      <div class="fieldlabel">Also accept</div>
+      <div class="a-chips">${others.map((t) => `<label class="check"><input type="checkbox" ${bind('k', path, 'acceptTypes', 'member', `data-v="${t}" data-rerender`)} ${(r.acceptTypes || []).includes(t) ? 'checked' : ''}> ${t}</label>`).join('')}</div>
+      ${(r.acceptTypes || []).length ? `<label class="field"><span>Note shown when an alternative is used</span><input ${bind('k', path, 'acceptNote', 'text', 'data-opt')} value="${esc(r.acceptNote || '')}"></label>` : ''}
+      ${assoc ? `
+        <label class="field"><span>Arrowheads</span><select ${bind('k', path, 'nav', 'sel', 'data-opt')}>
+          <option value="">Don't check</option><option value="to" ${r.nav === 'to' ? 'selected' : ''}>At ${esc(r.to)}</option><option value="from" ${r.nav === 'from' ? 'selected' : ''}>At ${esc(r.from)}</option><option value="both" ${r.nav === 'both' ? 'selected' : ''}>Both ends</option></select></label>
+        <div class="endbox"><h4>Next to ${esc(r.to)}</h4><div class="row2">
+          <label class="field"><span>Multiplicity</span><input class="mono" ${bind('k', path, 'toMult', 'list')} value="${listVal(r.toMult)}" placeholder="not checked"></label>
+          <label class="field"><span>Role</span><input class="mono" ${bind('k', path, 'toRole', 'list')} value="${listVal(r.toRole)}" placeholder="not checked"></label>
+        </div><label class="check"><input type="checkbox" ${bind('k', path, 'toMult', 'blank')} ${(r.toMult || []).includes('') ? 'checked' : ''}> Blank multiplicity is OK</label></div>
+        <div class="endbox"><h4>Next to ${esc(r.from)}</h4><div class="row2">
+          <label class="field"><span>Multiplicity</span><input class="mono" ${bind('k', path, 'fromMult', 'list')} value="${listVal(r.fromMult)}" placeholder="not checked"></label>
+          <label class="field"><span>Role</span><input class="mono" ${bind('k', path, 'fromRole', 'list')} value="${listVal(r.fromRole)}" placeholder="not checked"></label>
+        </div></div>
+        <label class="check"><input type="checkbox" data-act="orattr" data-i="${i}" ${r.orAttribute ? 'checked' : ''}> Also accept it as an attribute of ${esc(r.from)}${r.orAttribute ? ` <code>${esc(sigText(r.orAttribute))}</code>` : ''}</label>` : ''}
+      <label class="field"><span>Hint when it's wrong</span><input ${bind('k', path, 'typeHint', 'text', 'data-opt')} value="${esc(r.typeHint || '')}" placeholder="e.g. Item implements an interface."></label>
+    </div>`;
+  }).join('');
+  return `<div class="fieldlabel">Classes</div>${cls}<div class="fieldlabel" style="margin-top:10px">Relationships</div>${rels || '<p class="muted">None.</p>'}`;
+}
+function objectKeyForm(k) {
+  const objs = (k.objects || []).map((o, i) => `
+    <div class="a-card">
+      <div class="a-cardhead"><code>${esc(o.ref)}</code><button class="btn small" data-act="delobj" data-i="${i}" type="button" aria-label="Delete object">✕</button></div>
+      <label class="field"><span>Accepted classes (comma)</span><input class="mono" ${bind('k', ['objects', i], 'class', 'list')} value="${listVal(o.class)}"></label>
+      ${(o.attrs || []).map((a, j) => `<div class="row2">
+        <label class="field"><span>Attribute</span><input class="mono" ${bind('k', ['objects', i, 'attrs', j], 'name', 'text')} value="${esc(a.name)}"></label>
+        <label class="field"><span>Accepted values</span><input class="mono" ${bind('k', ['objects', i, 'attrs', j], 'value', 'list')} value="${listVal(a.value)}"></label>
+      </div>`).join('')}
+    </div>`).join('');
+  const links = (k.links || []).map((l, i) => `<li><code>${esc(l.a)} — ${esc(l.b)}</code> <button class="btn small" data-act="dellink" data-i="${i}" type="button">Delete</button></li>`).join('');
+  return `<div class="fieldlabel">Objects</div>${objs || '<p class="muted">None. Save a model answer, then generate the key.</p>'}
+    <div class="fieldlabel" style="margin-top:10px">Links</div><ul class="a-list">${links || '<li class="muted">None.</li>'}</ul>`;
+}
+function seqKeyForm(k) {
+  const lifes = (k.lifelines || []).map((l, i) => `
+    <div class="a-mem">
+      <code>${esc(l.ref)}</code>
+      <label class="a-inline"><span>Class</span><input class="mono" ${bind('k', ['lifelines', i], 'class', 'text')} value="${esc(l.class)}"></label>
+      <label class="check"><input type="checkbox" ${bind('k', ['lifelines', i], 'static', 'bool')} ${l.static ? 'checked' : ''}> Static (class lifeline)</label>
+      <label class="check"><input type="checkbox" ${bind('k', ['lifelines', i], 'created', 'bool')} ${l.created ? 'checked' : ''}> Created in this scenario</label>
+    </div>`).join('');
+  const refName = (ref) => { const l = (k.lifelines || []).find((x) => x.ref === ref); return l ? (l.static ? l.class : ':' + l.class) : ref; };
+  const callFields = (path, e) => `
+    <label class="a-inline"><span>Args</span><input type="number" min="0" class="mono a-num" ${bind('k', path, 'args', 'num')} value="${e.args ?? ''}" placeholder="any"></label>
+    ${e.create ? '' : `<label class="a-inline"><span>Returns</span><input class="mono" ${bind('k', path, 'returns', 'text', 'data-opt')} value="${esc(e.returns || '')}" placeholder="nothing"></label>`}`;
+  const items = (list, path, depth) => (list || []).map((e, i) => {
+    const pth = path.concat(i);
+    if (e.frame) {
+      const others = ['loop', 'alt', 'opt', 'par'].filter((f) => f !== e.frame);
+      return `<div class="a-node" style="--d:${depth}">
+        <div class="a-mem"><b class="mono">${esc(e.frame)}</b>
+          <select ${bind('k', pth, 'frame', 'sel', 'data-rerender')} aria-label="Frame type">${['loop', 'alt', 'opt', 'par'].map((f) => `<option ${f === e.frame ? 'selected' : ''}>${f}</option>`).join('')}</select>
+          <span class="muted">also accept</span>${others.map((f) => `<label class="check"><input type="checkbox" ${bind('k', pth, 'accept', 'member', `data-v="${f}"`)} ${(e.accept || []).includes(f) ? 'checked' : ''}> ${f}</label>`).join('')}
+        </div>
+        ${(e.branches || [{ body: e.body }]).map((b, bi) => `
+          <label class="a-inline"><span>Guard ${(e.branches || []).length > 1 ? bi + 1 : ''}</span><input class="mono" ${bind('k', pth.concat('branches', bi), 'guardExample', 'text', 'data-opt')} value="${esc(b.guardExample || '')}"></label>
+          ${items(b.body, pth.concat('branches', bi, 'body'), depth + 1)}`).join('')}
+      </div>`;
+    }
+    const label = e.create ? `create ${refName(e.create)}` : `${refName(e.call)}.${e.method}()`;
+    return `<div class="a-node" style="--d:${depth}"><div class="a-mem"><code>${esc(label)}</code>${callFields(pth, e)}</div>${items(e.body, pth.concat('body'), depth + 1)}</div>`;
+  }).join('');
+  const en = k.entry || {};
+  return `<div class="fieldlabel">Lifelines</div>${lifes || '<p class="muted">None. Save a model answer, then generate the key.</p>'}
+    <div class="fieldlabel" style="margin-top:10px">Calls, in order</div>
+    <div class="a-node" style="--d:0"><div class="a-mem"><code>→ ${esc(refName(en.to))}.${esc(en.method || '?')}()</code> <span class="muted">entry</span>${callFields(['entry'], en)}</div>
+    ${items(k.body, ['body'], 1)}</div>
+    <p class="a-hint">Method names, nesting and frames come from the model answer. To change them, edit the model and generate again, or edit as JSON.</p>`;
+}
+
+// ---- actions ----
+$('#author').addEventListener('toggle', (e) => {
+  const d = e.target.closest && e.target.closest('details[data-sec]');
+  if (d && e.target === d) { if (d.open) A.open.add(d.dataset.sec); else A.open.delete(d.dataset.sec); }
+}, true);
+$('#author').addEventListener('change', (e) => {
+  const t = e.target;
+  const P = curPart();
+  if (!P) return;
+  if (t.id === 'aId') {
+    const v = t.value.trim();
+    if (!/^[a-z0-9-]+$/.test(v)) { toast('Use lowercase letters, digits and dashes.'); t.value = P.q.id; return; }
+    if (S.questions.some((q) => q !== P.q && q.id === v)) { toast(`A question with id ${v} already exists.`); t.value = P.q.id; return; }
+    renameQuestion(P.q, v);
+    return;
+  }
+  if (t.id === 'aMode') {
+    if (t.value === P.p.mode) return;
+    const mode = t.value;
+    const fresh = UMLAuthor.blankPart(P.p.id, mode);
+    Object.assign(P.p, { mode, starter: fresh.starter, model: fresh.model, key: fresh.key, examples: [] });
+    const oldDefault = UMLAuthor.blankPart('x', Object.keys({ class: 1, object: 1, sequence: 1 }).find((m) => UMLAuthor.blankPart('x', m).prompt === P.p.prompt) || 'none');
+    if (!P.p.prompt.trim() || (oldDefault && oldDefault.prompt === P.p.prompt)) P.p.prompt = fresh.prompt;
+    S.diagrams[P.key] = emptyFor(P.p); store.set(P.key, S.diagrams[P.key]); delete S.results[P.key];
+    commitQ(P.q); S.sel = null; S.tool = null; S.pending = null;
+    renderToolbox(); renderAll(); renderAuthor();
+    toast(`Part (${P.p.id}) is now a ${mode} diagram.`);
+    return;
+  }
+  if (t.dataset.act === 'memopt') {
+    const c = P.p.key.classes[t.dataset.cls];
+    const from = t.dataset.arr;
+    const to = from.startsWith('optional') ? from.charAt(8).toLowerCase() + from.slice(9) : 'optional' + from[0].toUpperCase() + from.slice(1);
+    const [s] = c[from].splice(+t.dataset.i, 1);
+    (c[to] = c[to] || []).push(s);
+    if (!c[from].length) delete c[from];
+    commitQ(P.q); renderAuthor();
+    return;
+  }
+  if (t.dataset.act === 'orattr') {
+    const r = P.p.key.relations[+t.dataset.i];
+    if (t.checked) {
+      const role = (r.toRole || []).find(Boolean) || r.to.charAt(0).toLowerCase() + r.to.slice(1);
+      r.orAttribute = { name: role, vis: '-', type: [r.toMult && r.toMult.some((m) => m === '*' || /\.\.\*/.test(m)) ? `List<${r.to}>` : r.to] };
+    } else delete r.orAttribute;
+    commitQ(P.q); renderAuthor();
+  }
+});
+function renameQuestion(q, id) {
+  const old = q.id;
+  q.parts.forEach((p) => {
+    const ok = `${old}/${p.id}`, nk = `${id}/${p.id}`;
+    S.diagrams[nk] = S.diagrams[ok]; store.set(nk, S.diagrams[nk]); delete S.diagrams[ok];
+    if (S.results[ok]) { S.results[nk] = S.results[ok]; delete S.results[ok]; }
+  });
+  delete A.local[old];
+  A.order = A.order.map((x) => (x === old ? id : x));
+  q.id = id;
+  A.local[id] = q;
+  persistLocal();
+  rebuildParts();
+  renderTabs(); renderAuthor();
+  toast(`Renamed to ${id}.`);
+}
+
+$('#author').addEventListener('click', async (e) => {
+  const b = e.target.closest('button[data-act]');
+  if (!b) return;
+  const P = curPart();
+  const q = P.q, p = P.p;
+  const i = +b.dataset.i;
+  const canvas = () => clone(S.diagrams[P.key]);
+  switch (b.dataset.act) {
+    case 'download': await offerDownload(`${q.id}.json`, qJSON(q)); return;
+    case 'copyq': await copyText(qJSON(q), `Copied ${q.id}.json.`); return;
+    case 'import': $('#aFile').click(); return;
+    case 'new': newQuestion(); return;
+    case 'discard': {
+      if (!armed('discard', b, 'Click again to discard')) return;
+      const orig = clone(A.builtin[q.id]);
+      delete A.local[q.id]; A.order = A.order.filter((x) => x !== q.id); persistLocal();
+      const qi = S.questions.indexOf(q);
+      S.questions[qi] = orig;
+      orig.parts.forEach((pp) => { const k = `${orig.id}/${pp.id}`; if (!S.diagrams[k]) S.diagrams[k] = emptyFor(pp); });
+      rebuildParts(orig.parts.find((pp) => pp.id === p.id) || orig.parts[0]);
+      A.check = null; goTo(S.cur); renderAuthor(); toast('Restored the repo version.');
+      return;
+    }
+    case 'delq': {
+      if (!armed('delq', b, 'Click again to delete')) return;
+      delete A.local[q.id]; A.order = A.order.filter((x) => x !== q.id); persistLocal();
+      S.questions = S.questions.filter((x) => x !== q);
+      rebuildParts(S.questions[0] && S.questions[0].parts[0]);
+      A.check = null; goTo(S.cur); renderAuthor(); toast('Question deleted.');
+      return;
+    }
+    case 'addcode': q.code.push({ file: `File${q.code.length + 1}.java`, text: '' }); break;
+    case 'delcode': q.code.splice(i, 1); break;
+    case 'addpart': {
+      const used = new Set(q.parts.map((x) => x.id));
+      let id = 'a'; while (used.has(id)) id = String.fromCharCode(id.charCodeAt(0) + 1);
+      const np = UMLAuthor.blankPart(id, $('#aNewMode').value);
+      q.parts.push(np);
+      commitQ(q); rebuildParts(np); goTo(S.cur); setSide('author'); renderAuthor();
+      return;
+    }
+    case 'delpart': {
+      if (!armed('delpart', b, 'Click again to delete')) return;
+      q.parts = q.parts.filter((x) => x !== p);
+      commitQ(q); rebuildParts(q.parts[0]); goTo(S.cur); setSide('author'); renderAuthor();
+      return;
+    }
+    case 'setmodel':
+      if (S.view === 'model') { toast('Switch back to your diagram first.'); return; }
+      if (isEmptyDiagram(S.diagrams[P.key])) { toast('The canvas is empty. Draw the model answer first.'); return; }
+      p.model = canvas();
+      toast(isEmptyKey(p) ? 'Model saved. Now generate the key.' : 'Model saved. Generate the key again if the drawing changed.');
+      break;
+    case 'editmodel':
+    case 'editstarter': {
+      const src = b.dataset.act === 'editmodel' ? p.model : p.starter;
+      if (!isEmptyDiagram(S.diagrams[P.key]) && !armed(b.dataset.act, b, 'Replace the canvas? Click again')) return;
+      S.diagrams[P.key] = clone(src || UMLAuthor.emptyDiagram(p.mode)); store.set(P.key, S.diagrams[P.key]);
+      S.view = 'mine'; S.sel = null; delete S.results[P.key];
+      renderTabs(); renderAll(); renderAuthor();
+      return;
+    }
+    case 'setstarter':
+      if (S.view === 'model') { toast('Switch back to your diagram first.'); return; }
+      p.starter = canvas(); toast('Starter saved.');
+      break;
+    case 'clearstarter': p.starter = UMLAuthor.emptyDiagram(p.mode); break;
+    case 'genkey':
+      if (isEmptyDiagram(p.model)) { toast('Save a model answer first.'); return; }
+      if (!isEmptyKey(p) && !armed('genkey', b, 'Replace the current key? Click again')) return;
+      p.key = UMLAuthor.generateKey(p.mode, p.model);
+      A.jsonOpen = false;
+      toast('Draft key generated from the model answer.');
+      break;
+    case 'jsonkey': A.jsonOpen = !A.jsonOpen; A.jsonErr = ''; renderAuthor(); return;
+    case 'applyjson':
+      try { p.key = JSON.parse($('#aKeyJson').value); A.jsonErr = ''; toast('Key updated.'); }
+      catch (err) { A.jsonErr = 'Not valid JSON: ' + err.message; renderAuthor(); return; }
+      break;
+    case 'delrel': p.key.relations.splice(i, 1); break;
+    case 'delobj': {
+      const ref = p.key.objects[i].ref;
+      p.key.objects.splice(i, 1);
+      p.key.links = (p.key.links || []).filter((l) => l.a !== ref && l.b !== ref);
+      break;
+    }
+    case 'dellink': p.key.links.splice(i, 1); break;
+    case 'addex': {
+      if (S.view === 'model') { toast('Switch back to your diagram first.'); return; }
+      if (isEmptyDiagram(p.model)) { toast('Save a model answer first. Examples are stored as changes to it.'); return; }
+      const d = canvas();
+      const name = ($('#aExName').value || '').trim() || `Mistake ${(p.examples || []).length + 1}`;
+      if ((p.examples || []).some((x) => x.name === name)) { toast('Use a different name; examples need unique names.'); return; }
+      const r = UMLGrader.grade(p, d);
+      const patch = UMLAuthor.diffPatch(p.model, d);
+      const ex = { name, expect: { errors: r.errors, notes: r.notes } };
+      if (patch.diagram) ex.diagram = patch.diagram; else ex.patch = patch;
+      (p.examples = p.examples || []).push(ex);
+      toast(r.errors ? `Saved with ${r.errors} error${r.errors === 1 ? '' : 's'} and ${r.notes} note${r.notes === 1 ? '' : 's'}.` : 'Saved. Note: this example has no errors, so it records an accepted answer.');
+      break;
+    }
+    case 'loadex': {
+      const ex = p.examples[i];
+      let d;
+      try { d = UMLAuthor.exampleDiagram(p, ex); } catch (err) { toast(err.message); return; }
+      if (!isEmptyDiagram(S.diagrams[P.key]) && !armed('loadex' + i, b, 'Replace the canvas? Click again')) return;
+      S.diagrams[P.key] = d; store.set(P.key, d); S.view = 'mine'; S.sel = null;
+      S.results[P.key] = UMLGrader.grade(p, d);
+      renderTabs(); renderAll(); renderAuthor();
+      return;
+    }
+    case 'acceptex': {
+      const ex = p.examples[i];
+      const r = UMLGrader.grade(p, UMLAuthor.exampleDiagram(p, ex));
+      ex.expect = { errors: r.errors, notes: r.notes };
+      break;
+    }
+    case 'delex': p.examples.splice(i, 1); break;
+    default: return;
+  }
+  commitQ(q);
+  renderQuestion(); renderTabs(); renderAuthor();
+});
+function isEmptyKey(p) {
+  const k = p.key || {};
+  if (p.mode === 'sequence') return !(k.lifelines || []).length;
+  if (p.mode === 'object') return !(k.objects || []).length;
+  return !Object.keys(k.classes || {}).length;
 }
 
 // ---------------- boot ----------------
@@ -1558,19 +2267,22 @@ async function boot() {
   try {
     const idx = await (await fetch('questions/index.json')).json();
     for (const f of idx.questions) S.questions.push(await (await fetch('questions/' + f)).json());
+    S.questions.forEach((q) => { A.builtin[q.id] = clone(q); });
   } catch (e) {
     $('#layout').innerHTML = `<div class="loaderr"><h3>Could not load the questions</h3><p>The page reads <code>questions/*.json</code>. If you opened <code>index.html</code> straight from disk, serve the folder instead, for example <code>npx serve .</code> or <code>python3 -m http.server</code>, then open the address it prints.</p><p class="muted">${esc(e.message)}</p></div>`;
     return;
   }
-  S.questions.forEach((q, qi) => q.parts.forEach((p) => {
-    const key = `${q.id}/${p.id}`;
-    S.parts.push({ q, p, key, label: `Q${qi + 1} (${p.id})` });
-    S.diagrams[key] = store.get(key) || emptyFor(p);
-  }));
+  loadLocal();
+  S.questions = S.questions.map((q) => A.local[q.id] || q);
+  A.order.forEach((id) => { if (!A.builtin[id] && A.local[id]) S.questions.push(A.local[id]); });
+  rebuildParts();
   let start = 0;
   try { start = Math.min(S.parts.length - 1, Math.max(0, parseInt(localStorage.getItem('umldrill.v1.cur') || '0', 10) || 0)); } catch {}
   S.cur = start;
   renderTabs(); renderToolbox(); renderAll();
+  let auth = false;
+  try { auth = localStorage.getItem('umldrill.v1.author') === '1'; } catch {}
+  if (auth) setAuthor(true);
   if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => renderCanvas());
 }
 boot();
