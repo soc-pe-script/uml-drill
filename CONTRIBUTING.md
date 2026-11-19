@@ -179,7 +179,7 @@ The key describes the expected call tree, not the drawing:
 - `args` is the argument count; names are not checked.
 - Lifeline names are not checked beyond the `:Class` / `name:Class` format.
 - A frame with no calls inside, a call in the wrong activation, or the wrong frame type are errors.
-- An `alt` frame lists one entry in `branches` per part; `loop` and `opt` have one.
+- An `alt` frame lists one entry in `branches` per part; `loop` and `opt` have one. Mark a trailing branch `"optional": true` if it may be left out, e.g. an empty `[else]` for a switch's default.
 
 Sequence examples patch rows instead of edges: `"rows": { "r3": { "to": "b" } }`, `"removeRows"`, `"addRows": [{ "after": "r8", "row": { ... } }]`, `"lifelines": { ... }`, or `"order": [every row id in the new order]`.
 
@@ -195,8 +195,40 @@ CS2103T marking is flexible, and questions will often be ambiguous. Encode that 
 | Multiplicity is unknown from the code | include `""` in `toMult`, e.g. `["", "0..1", "1"]` |
 | A member may be drawn or left out | put it in `optionalMethods` / `optionalAttrs` |
 | An object attribute can be a linked object | `"orLinkedObject": { "class": "Rating", "name": ["POOR"] }` |
+| A two-way association may be one line or two one-way lines | `"nav": "both"` with `fromMult`/`fromRole`, plus `"orTwoLines": true` |
+| An `alt` part may be left out (an empty `[else]`, say) | `"optional": true` on that branch; optional branches go last |
+| An answer is half right | a `mistakes` entry with `"credit": 0.5` (see below) |
 
 Accepted alternatives show up as **notes**, not errors. If you're unsure whether something is acceptable, make it accepted with a note, and say so in the PR so a reviewer can decide.
+
+## Scores, partial credit and known mistakes
+
+Every part is scored. It is worth one mark per thing the key checks: each class, required attribute and method, required relation (two for `orTwoLines`), object, object attribute and link, lifeline, call, creation and frame. Set `"marks"` on the part to override the total. An **error** costs 1 mark, a **partial** costs `1 - credit`, and a **note** is free.
+
+`mistakes` names common wrong answers and says exactly what to tell the student. When the drawing matches one, its `msg` replaces the generic message. Add `credit` (between 0 and 1) to make it partly right instead of wrong:
+
+```jsonc
+// on a relation: match a line type, or a multiplicity or role at either end
+"mistakes": [
+  { "type": "aggregation", "credit": 0.5, "msg": "Route creates its Stops and nothing else holds them, so use composition." },
+  { "toMult": "0..5", "credit": 0.5, "msg": "The constructor always adds two Stops, so 2..5." },
+  { "toMult": ["*", "1..*"], "msg": "The array has room for only 5 Stops." }
+]
+// on a sequence call: the right method sent to the wrong lifeline, or the wrong method in its place
+"mistakes": [
+  { "to": "tray", "msg": "t.getOven() returns the Oven, so heat(1) goes to the Oven." },
+  { "method": "heat", "msg": "Kitchen calls finish(); heat(5) is a self-call inside it." }
+]
+// on a sequence frame: the wrong kind of frame
+"mistakes": [{ "frame": "opt", "credit": 0.5, "msg": "The cases exclude each other: use one alt frame." }]
+```
+
+Only give credit where a marker would give part marks: the idea is right but the notation is off, or the answer is close. A partly right line is still checked for direction, multiplicities and roles.
+
+The grader also handles some common mistakes without being told:
+- Several `opt` frames in a row where the key has an `alt` count as one mistake, and their calls are graded as the parts of the `alt`.
+- A link to an extra object is not counted on top of the object itself.
+- When a frame is the wrong kind, the calls inside it are compared as a whole, not part by part.
 
 ## Examples (tests)
 
@@ -205,7 +237,7 @@ Each part should have at least three `examples`. Each one patches the model answ
 ```jsonc
 {
   "name": "items shown as attribute and as a line",
-  "expect": { "errors": 1 },          // also "notes", or "errorsAtLeast"
+  "expect": { "errors": 1 },          // also "partials", "notes", "score", or "errorsAtLeast"
   "patch": {
     "nodes": { "inventory": { "attrs": ["-items: List<Item>"] } },  // overwrite fields by node id
     "edges": { "m5": { "navTo": false } },                           // overwrite fields by edge id

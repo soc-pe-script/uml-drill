@@ -209,6 +209,19 @@
       if (p.model) validateDiagram(`${pw} model`, p.model, out);
       if (p.starter) validateDiagram(`${pw} starter`, p.starter, out);
       const k = p.key || {};
+      const MISTAKE_FIELDS = ['type', 'toMult', 'fromMult', 'toRole', 'fromRole', 'frame', 'to', 'method'];
+      const checkMistakes = (owner, list) => (list || []).forEach((m, i) => {
+        const w = `${owner} mistake ${i + 1}`;
+        if (!m || typeof m.msg !== 'string' || !m.msg.trim()) fail(pw, `${w}: needs a "msg"`);
+        else if (!MISTAKE_FIELDS.some((f) => m[f] !== undefined)) fail(pw, `${w}: say what it matches (${MISTAKE_FIELDS.join(', ')})`);
+        if (m && m.credit !== undefined && !(m.credit > 0 && m.credit < 1)) fail(pw, `${w}: credit must be between 0 and 1`);
+      });
+      for (const r of k.relations || []) checkMistakes(`relation ${r.from}→${r.to}`, r.mistakes);
+      const walkM = (items) => (items || []).forEach((e) => {
+        checkMistakes(e.frame ? `${e.frame} frame` : e.method ? `${e.method}()` : 'item', e.mistakes);
+        walkM(e.body); (e.branches || []).forEach((b) => walkM(b.body));
+      });
+      walkM(k.body);
       if (p.mode === 'class') {
         for (const r of k.relations || []) {
           if (!EDGE_TYPES.includes(r.type)) fail(pw, `relation ${r.from}→${r.to}: bad type "${r.type}"`);
@@ -253,8 +266,11 @@
         if (x.errors !== undefined && r.errors !== x.errors) bad.push(`${r.errors} errors, expected ${x.errors}`);
         if (x.errorsAtLeast !== undefined && r.errors < x.errorsAtLeast) bad.push(`${r.errors} errors, expected at least ${x.errorsAtLeast}`);
         if (x.notes !== undefined && r.notes !== x.notes) bad.push(`${r.notes} notes, expected ${x.notes}`);
+        // partial-credit items are only counted when the example says how many to expect
+        if (x.partials !== undefined && r.partials !== x.partials) bad.push(`${r.partials} partial, expected ${x.partials}`);
+        if (x.score !== undefined && r.score.got !== x.score) bad.push(`score ${r.score.got}/${r.score.max}, expected ${x.score}`);
         if (bad.length) problems.push({ where, msg: bad.join('; '), issues: r.issues });
-        else passed.push({ where, msg: `${r.errors} errors, ${r.notes} notes`, issues: r.issues });
+        else passed.push({ where, msg: `${r.errors} errors, ${r.partials ? r.partials + ' partial, ' : ''}${r.notes} notes · score ${r.score.got}/${r.score.max}`, issues: r.issues });
       }
     }
     return { problems, passed };

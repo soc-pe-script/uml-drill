@@ -23,8 +23,12 @@ You are helping someone add a question to UML Drill, a practice tool for CS2103T
    - `ClassName.method()` → a call to a lifeline with `"static": true`.
    - `for`/`while` around calls → `loop`; `if/else` with calls in both branches → `alt` with two branches; `if` alone → `opt`. Never add a frame that wraps no calls.
    - Calls in an `if` condition happen before the frame.
+   **Make the key flexible** (see "Handling ambiguity" and "Scores, partial credit and known mistakes" in `CONTRIBUTING.md`):
+   - Accept every form a marker would accept (`acceptTypes`, `orAttribute`, `orTwoLines`, optional branches) instead of picking one.
+   - For each mistake students are likely to make here, add a `mistakes` entry whose `msg` explains it in terms of this code.
+   - Give `credit` (usually 0.5) only when the idea is right and the notation is off, or the answer is close (e.g. `0..5` where the constructor guarantees 2).
 5. **Write the model answer** as a diagram (`nodes`, `edges`; or `lifelines`, `rows` for sequence parts). Node and edge ids must be unique. Lay boxes out without overlap on a 1000×640 canvas: boxes are about 150–300 px wide and 60–140 px tall. Put parents above children.
-6. **Write at least three `examples` per part**, each a patch of the model with a realistic mistake and the exact expected error count.
+6. **Write at least three `examples` per part**, each a patch of the model with a realistic mistake and the exact expected error count. Include `"partials"` in `expect` for any example that hits a mistake with credit, and cover each `mistakes` entry with at least one example.
 7. **Run `node scripts/check.js <id> -v`.** Fix the question until it passes. Never change `grader.js` to make your question pass.
 8. **Report back**: list every judgement call (accepted alternatives, optional items, unknown multiplicities) so the person can review them before opening the PR.
 

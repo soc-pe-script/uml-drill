@@ -147,23 +147,58 @@
 
   // ---------- helpers ----------
 
+  // Severities: error (costs 1 mark), partial (half right: costs 1 - credit), note (free).
   function makeReporter() {
     const issues = [];
     return {
       issues,
       error: (where, msg, ref) => issues.push({ sev: 'error', where, msg, ref: ref || null }),
       note: (where, msg, ref) => issues.push({ sev: 'note', where, msg, ref: ref || null }),
+      partial: (where, msg, ref, cost) => issues.push({ sev: 'partial', where, msg, ref: ref || null, cost }),
     };
   }
 
   const listOf = (v) => (v == null ? null : Array.isArray(v) ? v : [v]);
   const typeIn = (t, list) => listOf(list).map(squash).includes(squash(t));
   const sigOf = (m) => `${m.vis || ''}${m.name}(${(m.params || []).map((p) => p.type).join(', ')})`;
+  const costOf = (i) => (i.sev === 'error' ? 1 : i.sev === 'partial' ? i.cost : 0);
 
-  function summarize(issues) {
+  /**
+   * Known mistakes from the key: [{ <field>: value, msg, credit? }]. When the drawing matches one,
+   * its msg replaces the generic message. With credit (0..1) it is a partial, not an error.
+   */
+  function findMistake(list, field, val, norm) {
+    const f = norm || clean;
+    return (list || []).find((m) => m[field] !== undefined && listOf(m[field]).some((v) => f(v) === f(val)));
+  }
+  function reportMistake(rep, where, m, ref) {
+    if (m.credit > 0 && m.credit < 1) rep.partial(where, m.msg, ref, Math.round((1 - m.credit) * 100) / 100);
+    else rep.error(where, m.msg, ref);
+  }
+
+  /** Marks available in a part: one per thing the key asks for, unless the part sets "marks". */
+  function maxMarks(part) {
+    if (part.marks > 0) return part.marks;
+    const k = part.key || {};
+    if (part.mode === 'sequence') {
+      const count = (items) => (items || []).reduce((s, e) => s + 1 + count(e.body) + (e.branches || []).reduce((t, b) => t + count(b.body), 0), 0);
+      return (k.lifelines || []).length + 1 + count(k.body);
+    }
+    if (part.mode === 'object') {
+      return (k.objects || []).reduce((s, o) => s + 1 + (o.attrs || []).length, 0) + (k.links || []).length;
+    }
+    const cls = Object.values(k.classes || {}).reduce((s, c) => s + 1 + (c.attrs || []).length + (c.methods || []).length + (c.values ? 1 : 0), 0);
+    const rels = (k.relations || []).filter((r) => !r.optional).reduce((s, r) => s + (r.orTwoLines ? 2 : 1), 0);
+    return cls + rels;
+  }
+
+  function summarize(issues, max) {
+    const lost = issues.reduce((s, i) => s + costOf(i), 0);
     return {
       errors: issues.filter((i) => i.sev === 'error').length,
+      partials: issues.filter((i) => i.sev === 'partial').length,
       notes: issues.filter((i) => i.sev === 'note').length,
+      score: { got: Math.max(0, Math.round((max - lost) * 2) / 2), max },
       issues,
     };
   }
@@ -241,10 +276,13 @@
     const forward = names[e.from] === rel.from;
 
     if (!accepted.includes(e.type)) {
-      local.error(where, `Wrong kind of line: drew ${TYPE_WORD[e.type] || e.type}, expected ${TYPE_WORD[rel.type]}.${rel.typeHint ? ' ' + rel.typeHint : ''}`, ref);
-      return local.issues;
+      const mk = findMistake(rel.mistakes, 'type', e.type);
+      if (mk) reportMistake(local, where, mk, ref);
+      else local.error(where, `Wrong kind of line: drew ${TYPE_WORD[e.type] || e.type}, expected ${TYPE_WORD[rel.type]}.${rel.typeHint ? ' ' + rel.typeHint : ''}`, ref);
+      // a half-right line type is still checked for direction, multiplicity and roles
+      if (!mk || !(mk.credit > 0)) return local.issues;
     }
-    if (rel.acceptTypes && e.type !== rel.type && rel.acceptNote) local.note(where, rel.acceptNote, ref);
+    if (rel.acceptTypes && e.type !== rel.type && accepted.includes(e.type) && rel.acceptNote) local.note(where, rel.acceptNote, ref);
 
     if (DIRECTED_TYPES.includes(e.type) && !forward) {
       local.error(where, `Arrow points the wrong way. It should go from ${rel.from} to ${rel.to}.`, ref);
@@ -273,11 +311,15 @@
     }
 
     const endVal = (field, end) => clean(e[end + field]);
-    const checkEnd = (field, label, wantList, end, otherEnd, cls, norm) => {
+    const checkEnd = (field, label, wantList, end, otherEnd, cls, norm, side) => {
       if (!wantList) return;
       const list = listOf(wantList).map(norm);
       const got = norm(endVal(field, end));
       const other = norm(endVal(field, otherEnd));
+      if (!list.includes(got)) {
+        const mk = findMistake(rel.mistakes, side + field, got, norm);
+        if (mk) { reportMistake(local, where, mk, ref); return; }
+      }
       if (!got) {
         if (list.includes('')) return;
         if (other && list.includes(other)) local.error(where, `The ${label} "${other}" is at the wrong end. Put it next to ${cls}.`, ref);
@@ -287,10 +329,10 @@
       }
     };
     if (ASSOC_TYPES.includes(e.type)) {
-      checkEnd('Mult', 'multiplicity', rel.toMult, atTo, atFrom, rel.to, normMult);
-      checkEnd('Mult', 'multiplicity', rel.fromMult, atFrom, atTo, rel.from, normMult);
-      checkEnd('Role', 'role', rel.toRole, atTo, atFrom, rel.to, clean);
-      checkEnd('Role', 'role', rel.fromRole, atFrom, atTo, rel.from, clean);
+      checkEnd('Mult', 'multiplicity', rel.toMult, atTo, atFrom, rel.to, normMult, 'to');
+      checkEnd('Mult', 'multiplicity', rel.fromMult, atFrom, atTo, rel.from, normMult, 'from');
+      checkEnd('Role', 'role', rel.toRole, atTo, atFrom, rel.to, clean, 'to');
+      checkEnd('Role', 'role', rel.fromRole, atFrom, atTo, rel.from, clean, 'from');
     } else if (['Mult', 'Role'].some((f) => clean(e['from' + f]) || clean(e['to' + f]))) {
       local.error(where, `Multiplicities and roles only go on associations, not on ${TYPE_WORD[e.type]}.`, ref);
     }
@@ -322,6 +364,27 @@
       const fromNode = byName[rel.from];
       const findAttr = (nm) => fromNode && fromNode.attrs.map(parseMember).find((m) => !m.isMethod && m.name === nm);
 
+      // A two-way association may also be drawn as two one-way lines.
+      const assocCands = cands.filter((e) => ASSOC_TYPES.includes(e.type));
+      if (rel.orTwoLines && assocCands.length >= 2) {
+        const sideOnly = (keep) => (rel.mistakes || []).filter((m) => m.type !== undefined || keep(m));
+        const relA = Object.assign({}, rel, { nav: 'to', fromMult: undefined, fromRole: undefined,
+          mistakes: sideOnly((m) => m.toMult !== undefined || m.toRole !== undefined) });
+        const relB = Object.assign({}, rel, { from: rel.to, to: rel.from, nav: 'to', toMult: rel.fromMult, toRole: rel.fromRole, fromMult: undefined, fromRole: undefined,
+          mistakes: sideOnly((m) => m.fromMult !== undefined || m.fromRole !== undefined).map((m) => Object.assign({}, m, { toMult: m.fromMult, toRole: m.fromRole, fromMult: undefined, fromRole: undefined })) });
+        let best = null;
+        for (const a of assocCands) for (const b of assocCands) {
+          if (a === b) continue;
+          const iss = evalEdge(relA, a, names).concat(evalEdge(relB, b, names));
+          const score = iss.reduce((s, i) => s + costOf(i), 0);
+          if (!best || score < best.score) best = { a, b, iss, score };
+        }
+        used.add(best.a.id); used.add(best.b.id);
+        best.iss.forEach((i) => r.issues.push(i));
+        r.note(relDesc(rel), rel.twoLinesNote || `Two one-way lines are accepted. ${rel.from} and ${rel.to} refer to each other, so the usual form is one line with arrowheads at both ends.`, { edge: best.a.id });
+        continue;
+      }
+
       if (!cands.length) {
         if (rel.orAttribute) {
           const a = findAttr(rel.orAttribute.name);
@@ -346,7 +409,7 @@
       let best = null;
       for (const e of cands) {
         const iss = evalEdge(rel, e, names);
-        const score = iss.filter((i) => i.sev === 'error').length;
+        const score = iss.reduce((s, i) => s + costOf(i), 0);
         if (!best || score < best.score) best = { e, iss, score };
       }
       used.add(best.e.id);
@@ -368,7 +431,10 @@
       addRole(names[e.from], clean(e.toRole));
       addRole(names[e.to], clean(e.fromRole));
     }
-    for (const rel of key.relations || []) (listOf(rel.toRole) || []).forEach((x) => addRole(rel.from, x));
+    for (const rel of key.relations || []) {
+      (listOf(rel.toRole) || []).forEach((x) => addRole(rel.from, x));
+      (listOf(rel.fromRole) || []).forEach((x) => addRole(rel.to, x));
+    }
 
     // ---- classes ----
     const classes = key.classes || {};
@@ -548,10 +614,12 @@
         if (e.navTo || e.navFrom) r.note(where, 'Arrowheads are not needed on object links; a plain line is the usual form.', ref);
       });
     }
+    const extraObj = (o) => !taken.has(o.id) && !extraOk.has(o.id);
     for (const e of diagram.edges || []) {
       if (edgeOk.has(e.id)) continue;
       const a = ids[e.from], b = ids[e.to];
       if (!a || !b) continue;
+      if (extraObj(a) || extraObj(b)) continue; // the extra object is already an error; its links are part of it
       r.error(`${a.name} – ${b.name}`, `Unexpected link between ${a.name} and ${b.name}.`, { edge: e.id });
     }
     return r.issues;
@@ -778,7 +846,33 @@
         const gapE = E.slice(pi, mi), gapA = A.slice(pj, mj);
         // pair loosely-compatible items in the same gap, in order
         const usedA = new Set();
+        const doneE = new Set();
+        // known mistake first: the right method sent to a lifeline the key names in "mistakes"
         for (const e of gapE) {
+          if (!e.call || !e.mistakes) continue;
+          const x = gapA.find((y) => !usedA.has(y) && y.kind === 'call' && parseCall(y.label).name === e.method && findMistake(e.mistakes, 'to', refOf[y.to] || ''));
+          if (!x) continue;
+          usedA.add(x); doneE.add(e);
+          reportMistake(r, ctx, findMistake(e.mistakes, 'to', refOf[x.to]), firstRow(x));
+          compareList(e.body || [], x.children || [], `inside ${e.method}()`, x);
+        }
+        for (const e of gapE) {
+          if (doneE.has(e)) continue;
+          // a switch or if/else drawn as several opt frames in a row: one mistake, then grade as the alt
+          if (e.frame === 'alt') {
+            const i0 = gapA.findIndex((x) => !usedA.has(x) && x.kind === 'frame' && x.frame === 'opt');
+            const run = [];
+            for (let i = i0; i0 >= 0 && i < gapA.length && gapA[i].kind === 'frame' && gapA[i].frame === 'opt' && !usedA.has(gapA[i]); i++) run.push(gapA[i]);
+            if (run.length >= 2) {
+              run.forEach((x) => usedA.add(x));
+              const merged = { kind: 'frame', frame: 'alt', merged: true, row: run[0].row, branches: run.flatMap((x) => x.branches) };
+              const mk = findMistake(e.mistakes, 'frame', 'opt');
+              if (mk) reportMistake(r, ctx, mk, { row: run[0].row });
+              else r.error(ctx, `These ${run.length} opt frames are the cases of one choice, and only one of them can run. Draw one alt frame with a part for each case.`, { row: run[0].row });
+              compareItem(e, merged, ctx, true);
+              continue;
+            }
+          }
           const a = gapA.find((x) => !usedA.has(x) && looseOK(e, x) && (e.frame || refOf[x.to] === (e.create || e.call)));
           if (a) { usedA.add(a); compareItem(e, a, ctx, true); }
           else missing.push({ e, ctx });
@@ -792,10 +886,22 @@
     function compareItem(e, a, ctx, loose) {
       const ref = firstRow(a);
       if (e.frame) {
-        if (a.frame !== e.frame && !(e.accept || []).includes(a.frame)) r.error(ctx, `Use a ${e.frame} frame here, not ${a.frame}. ${e.hint || FRAME_HINT[e.frame]}`, ref);
+        if (a.frame !== e.frame && !(e.accept || []).includes(a.frame)) {
+          const mk = findMistake(e.mistakes, 'frame', a.frame);
+          if (mk) reportMistake(r, ctx, mk, ref);
+          else r.error(ctx, `Use a ${e.frame} frame here, not ${a.frame}. ${e.hint || FRAME_HINT[e.frame]}`, ref);
+        }
         const eb = e.branches || [{ body: e.body || [] }];
-        if (a.frame === e.frame && eb.length !== a.branches.length) r.error(ctx, `The ${e.frame} frame should have ${eb.length} part${eb.length === 1 ? '' : 's'}${e.frame === 'alt' ? ' (one per branch of the if/else)' : ''}, not ${a.branches.length}.`, ref);
+        // branches marked optional (an empty [else], say) may be left out; they must come last
+        const minB = eb.filter((b) => !b.optional).length;
+        const nA = a.branches.length;
+        if (a.frame === e.frame && (nA < minB || nA > eb.length)) r.error(ctx, `The ${e.frame} frame should have ${minB}${eb.length > minB ? ' or ' + eb.length : ''} part${eb.length === 1 ? '' : 's'}${e.frame === 'alt' ? ' (one per branch of the if/else or switch)' : ''}, not ${nA}.`, ref);
         a.branches.forEach((b, bi) => { if (!b.guard) r.error(ctx, `Add a guard condition in square brackets to ${a.branches.length > 1 ? 'part ' + (bi + 1) + ' of ' : ''}the ${a.frame} frame, e.g. ${(eb[bi] && eb[bi].guardExample) || (e.frame === 'loop' ? '[for each item]' : '[else]')}.`, { row: b.row }); });
+        if (a.frame !== e.frame && eb.length > 1) {
+          // wrong kind of frame: its parts can't line up with the key's, so compare the calls inside as a whole
+          compareList(eb.flatMap((b) => b.body || []), a.branches.flatMap((b) => b.children), `inside the ${e.frame} frame`);
+          return;
+        }
         eb.forEach((b, bi) => {
           const ab = a.branches[bi];
           compareList(b.body || [], ab ? ab.children : [], `inside the ${e.frame} frame${eb.length > 1 ? ' (part ' + (bi + 1) + ')' : ''}`);
@@ -811,9 +917,13 @@
       if (e.create && a.kind !== 'create') r.error(ctx, `${lname(e.create)} is created here. Point the arrow at the ${lname(e.create)} box and place the box at this height (use the Create message).`, ref);
       if (e.call && a.kind === 'create') r.error(ctx, `${lname(e.call)} already exists; this is a normal call, not a creation.`, ref);
       if (a.kind === 'delete') r.error(ctx, `${descE(e)} is expected here, not a deletion.`, ref);
+      let skipBody = false;
       if (e.call && a.kind === 'call') {
         const pc = parseCall(a.label);
-        if (pc.name !== e.method) r.error(ctx, `"${a.label}" should call ${e.method}().`, ref);
+        const mk = pc.name !== e.method && findMistake(e.mistakes, 'method', pc.name);
+        // a known wrong method explains the whole call, so its missing inner calls are not counted again
+        if (mk) { reportMistake(r, ctx, mk, ref); skipBody = true; }
+        else if (pc.name !== e.method) r.error(ctx, `"${a.label}" should call ${e.method}().`, ref);
         else if (!pc.hasParens) r.error(ctx, `Write the call with brackets: ${e.method}(${'…'.repeat(Math.min(1, e.args || 0))}).`, ref);
         else if (e.args !== undefined && pc.args.length !== e.args) r.error(ctx, `"${a.label}" should pass ${e.args} argument${e.args === 1 ? '' : 's'}.`, ref);
       }
@@ -829,7 +939,7 @@
         r.error(ctx, `${e.method}() returns nothing, so its return arrow has no value. Remove "${a.ret.label}" or the arrow.`, { row: a.ret.row });
       }
       if (e.create && a.kind === 'create' && !createdRefs.has(e.create)) r.error(ctx, `${lname(e.create)} is not created in this scenario.`, ref);
-      compareList(e.body || [], a.children || [], `inside ${e.create ? 'the ' + lname(e.create) + ' constructor' : e.method + '()'}`, a);
+      if (!skipBody) compareList(e.body || [], a.children || [], `inside ${e.create ? 'the ' + lname(e.create) + ' constructor' : e.method + '()'}`, a);
     }
 
     // entry call
@@ -862,6 +972,15 @@
       hits.forEach((u) => { u.done = true; });
       m.done = true;
       r.error(m.ctx, `Missing the ${m.e.frame} frame around ${hits.map((u) => descA(u.a)).join(', ')}. ${m.e.hint || FRAME_HINT[m.e.frame]}`, firstRow(hits[0].a));
+    }
+    // a known mistake: the right method sent to the wrong lifeline -> one error with the key's message
+    for (const m of missing) {
+      if (m.done || !m.e.call || !m.e.mistakes) continue;
+      const u = unexpected.find((x) => !x.done && x.ctx === m.ctx && x.a.kind === 'call'
+        && parseCall(x.a.label).name === m.e.method && findMistake(m.e.mistakes, 'to', refOf[x.a.to] || ''));
+      if (!u) continue;
+      u.done = true; m.done = true;
+      reportMistake(r, m.ctx, findMistake(m.e.mistakes, 'to', refOf[u.a.to]), firstRow(u.a));
     }
     // pair "missing here" with "unexpected there" -> one "wrong place" error
     for (const m of missing) {
@@ -917,7 +1036,7 @@
       const d = diagram || { nodes: [], edges: [] };
       issues = part.mode === 'object' ? gradeObjectDiagram(part.key, d) : gradeClassDiagram(part.key, d);
     }
-    return summarize(issues);
+    return summarize(issues, maxMarks(part));
   }
 
   /** Plain-text dump of a diagram, for asking Claude or for debugging. */
@@ -947,5 +1066,5 @@
     return lines.join('\n');
   }
 
-  return { grade, toText, parseMember, parseHeader, normNode, buildSeqTree, parseCall, parseLifeline, START };
+  return { grade, toText, maxMarks, parseMember, parseHeader, normNode, buildSeqTree, parseCall, parseLifeline, START };
 });

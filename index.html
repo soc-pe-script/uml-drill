@@ -26,6 +26,8 @@
   --ok-soft: #dff2e6;
   --note: #8a5a00;
   --note-soft: #f8edd5;
+  --part: #6a46b5;
+  --part-soft: #ece6f8;
   --f-display: "Bricolage Grotesque", "IBM Plex Sans", system-ui, sans-serif;
   --f-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
   --f-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
@@ -36,6 +38,7 @@
     --paper: #10161a; --panel: #172026; --sunk: #1d2830; --grid: #1f2c33; --ink: #e2eaed; --ink-2: #98a8b0; --rule: #2d3a42;
     --accent: #78a6ff; --accent-soft: #1f2f4d; --on-accent: #0d1420; --tile-box: #1e2a40; --tile-line: #16312a; --tile-line-ink: #6fd3b4;
     --err: #ff8173; --err-soft: #3a1f1c; --ok: #5fcf8f; --ok-soft: #173023; --note: #e6b455; --note-soft: #33290f;
+    --part: #b9a1ff; --part-soft: #2a2140;
     color-scheme: dark;
   }
 }
@@ -43,6 +46,7 @@
   --paper: #10161a; --panel: #172026; --sunk: #1d2830; --grid: #1f2c33; --ink: #e2eaed; --ink-2: #98a8b0; --rule: #2d3a42;
   --accent: #78a6ff; --accent-soft: #1f2f4d; --on-accent: #0d1420; --tile-box: #1e2a40; --tile-line: #16312a; --tile-line-ink: #6fd3b4;
   --err: #ff8173; --err-soft: #3a1f1c; --ok: #5fcf8f; --ok-soft: #173023; --note: #e6b455; --note-soft: #33290f;
+  --part: #b9a1ff; --part-soft: #2a2140;
   color-scheme: dark;
 }
 
@@ -237,7 +241,12 @@ details.a-card[open] > summary { margin-bottom: 8px; }
 .score .num { font: 700 40px/1 var(--f-display); font-variant-numeric: tabular-nums; }
 .score.clean .num { color: var(--ok); }
 .score.dirty .num { color: var(--err); }
+.score.part .num { color: var(--part); }
 .score .lbl { font-weight: 600; }
+.score .of { font: 600 20px/1 var(--f-display); color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.issue.partial { background: var(--part-soft); }
+.issue.partial .where { color: var(--part); }
+.issue .cost { float: right; font: 600 11px/1.3 var(--f-mono); color: var(--ink-2); margin-left: 8px; }
 .issues { list-style: none; margin: 10px 0 16px; padding: 0; display: flex; flex-direction: column; gap: 6px; }
 .issue { border-radius: 6px; padding: 7px 9px; cursor: pointer; border: 1px solid transparent; }
 .issue.error { background: var(--err-soft); }
@@ -516,11 +525,15 @@ function renderCanvas() {
   const pairCount = {}, pairIdx = {};
   const pk = (e) => [e.from, e.to].sort().join('|');
   for (const e of d.edges) pairCount[pk(e)] = (pairCount[pk(e)] || 0) + 1;
+  const selfIdx = {};
   for (const e of d.edges) {
-    if (!boxes[e.from] || !boxes[e.to] || e.from === e.to) continue;
+    if (!boxes[e.from] || !boxes[e.to]) continue;
+    if (e.from === e.to) { selfIdx[e.from] = (selfIdx[e.from] ?? -1) + 1; drawSelfEdge(gE, e, selfIdx[e.from]); continue; }
     const k = pk(e);
     const i = (pairIdx[k] = (pairIdx[k] ?? -1) + 1);
-    drawEdge(gE, e, i - (pairCount[k] - 1) / 2);
+    // the offset is measured along the line's own normal, so flip it for lines drawn the other way round
+    const flip = [e.from, e.to].sort()[0] === e.from ? 1 : -1;
+    drawEdge(gE, e, flip * (i - (pairCount[k] - 1) / 2));
   }
 
   // nodes
@@ -557,7 +570,7 @@ function drawEdge(parent, e, offsetIndex) {
   let dx = cb.x - ca.x, dy = cb.y - ca.y;
   const len = Math.hypot(dx, dy) || 1;
   const nx = -dy / len, ny = dx / len;
-  const off = offsetIndex * 18;
+  const off = offsetIndex * 28; // wide enough that one line's labels clear its neighbour
   const sa = { x: ca.x + nx * off, y: ca.y + ny * off }, sb = { x: cb.x + nx * off, y: cb.y + ny * off };
   const pa = clip(sa, sb, A), pb = clip(sb, sa, B);
   const ux = (pb.x - pa.x) / (Math.hypot(pb.x - pa.x, pb.y - pa.y) || 1), uy = (pb.y - pa.y) / (Math.hypot(pb.x - pa.x, pb.y - pa.y) || 1);
@@ -607,6 +620,41 @@ function drawEdge(parent, e, offsetIndex) {
   if (e.label) lab({ x: (pa.x + pb.x) / 2, y: (pa.y + pb.y) / 2 }, 0, 10, e.label);
 }
 
+/**
+ * A class that refers to itself: a loop out of the top edge and back into the left edge,
+ * near the top-left corner (lines to other classes usually leave from the right or below).
+ * "from" is the top end, "to" (arrowhead, multiplicity) the left end.
+ */
+function drawSelfEdge(parent, e, k) {
+  const A = boxes[e.from];
+  const r = 34 + k * 18;                                    // later loops sit outside earlier ones
+  const p0 = { x: A.x + r, y: A.y };                        // leaves the top edge
+  const p3 = { x: A.x, y: A.y + r };                        // re-enters the left edge
+  const p1 = { x: p0.x, y: A.y - r }, p2 = { x: A.x - r, y: A.y - r }, p2b = { x: p2.x, y: p3.y };
+  const cls = ['edge'];
+  if (S.view === 'mine' && S.sel && S.sel.kind === 'edge' && S.sel.id === e.id) cls.push('sel');
+  if (S.hl && S.hl.edge === e.id) cls.push('hl');
+  const g = el('g', { class: cls.join(' '), 'data-edge': e.id }, parent);
+  let start = p0;
+  const decos = [];
+  if (e.type === 'composition' || e.type === 'aggregation') {
+    decos.push({ d: [p0, { x: p0.x - 6, y: p0.y - 10 }, { x: p0.x, y: p0.y - 20 }, { x: p0.x + 6, y: p0.y - 10 }], kind: e.type === 'composition' ? 'solid' : '' });
+    start = { x: p0.x, y: p0.y - 20 };
+  }
+  if (e.navTo) decos.push({ d: [{ x: p3.x - 12, y: p3.y - 6.5 }, p3, { x: p3.x - 12, y: p3.y + 6.5 }], open: true, kind: 'open' });
+  if (e.navFrom) decos.push({ d: [{ x: p0.x - 6.5, y: p0.y - 12 }, p0, { x: p0.x + 6.5, y: p0.y - 12 }], open: true, kind: 'open' });
+  const path = [start, p1, p2, p2b, p3];
+  el('polyline', { class: 'stroke' + (e.type === 'dependency' ? ' dash' : ''), points: pts(path), fill: 'none' }, g);
+  for (const dc of decos) el(dc.open ? 'polyline' : 'polygon', { class: 'deco ' + dc.kind, points: pts(dc.d) }, g);
+  el('polyline', { class: 'hit', points: pts([p0, p1, p2, p2b, p3]), fill: 'none' }, g);
+  const lab = (x, y, s, anchor) => { if (s && String(s).trim()) text(g, x, y, String(s).trim(), { anchor }); };
+  lab(p3.x - 6, p3.y + 16, e.toMult, 'end');                 // below the arrowhead
+  lab(p2.x - 6, (p2.y + p3.y) / 2 + 4, e.toRole, 'end');      // beside the left-hand leg
+  lab(p0.x + 6, p0.y - 6, e.fromMult, 'start');
+  lab(p0.x + 6, p1.y + 14, e.fromRole, 'start');
+  if (e.label) lab((p1.x + p2.x) / 2, p1.y - 6, e.label, 'middle');
+}
+
 // ---------------- canvas interaction ----------------
 function svgPoint(evt) {
   const m = svg.getScreenCTM();
@@ -625,7 +673,8 @@ svg.addEventListener('pointerdown', (evt) => {
     if (nodeEl) {
       const id = nodeEl.dataset.node;
       if (!S.pending) { S.pending = id; renderStatus(); renderCanvas(); return; }
-      if (id === S.pending) return;
+      // the same box twice makes a self-association; other line types cannot point at their own class
+      if (id === S.pending && !['association', 'composition', 'aggregation'].includes(S.tool.type)) return;
       const e = { id: uid('e'), type: S.tool.type, from: S.pending, to: id, navTo: !!S.tool.navTo, navFrom: false, fromMult: '', toMult: '', fromRole: '', toRole: '', label: '' };
       d.edges.push(e);
       S.pending = null; S.tool = null;
@@ -1377,7 +1426,7 @@ function helpHTML(mode) {
   return `<div class="help">
     <h3>How to draw</h3>
     <p><strong>Boxes:</strong> click a tile in the toolbox, or drag it onto the paper. Edit the name and members here.</p>
-    <p><strong>Lines:</strong> pick a line tile, then click two boxes. The order matters: ${mode === 'object' ? 'for links it does not.' : 'child then parent, user then used, whole then part.'} Set arrowheads, multiplicities and roles after.</p>
+    <p><strong>Lines:</strong> pick a line tile, then click two boxes. The order matters: ${mode === 'object' ? 'for links it does not.' : 'child then parent, user then used, whole then part. For a class that refers to itself, click the same box twice.'} Set arrowheads, multiplicities and roles after.</p>
     <p><strong>Grade</strong> checks your diagram against the answer key. It accepts common alternatives (for example parameter types without names) and explains each mistake.</p>
     <p class="muted">Delete removes the selected item. Esc cancels a line tool. Your work is kept in this browser.</p>
     ${cheatHTML(mode === 'object' ? 'object' : 'class')}
@@ -1424,12 +1473,17 @@ function renderResults() {
     return;
   }
   const errs = res.issues.filter((i) => i.sev === 'error');
+  const parts = res.issues.filter((i) => i.sev === 'partial');
   const notes = res.issues.filter((i) => i.sev === 'note');
-  const item = (i, idx) => `<li class="issue ${i.sev}" data-i="${idx}" tabindex="0"><span class="where">${esc(i.where)}</span>${esc(i.msg)}</li>`;
+  const cost = (i) => (i.sev === 'error' ? '−1' : i.sev === 'partial' ? '−' + i.cost : '');
+  const item = (i, idx) => `<li class="issue ${i.sev}" data-i="${idx}" tabindex="0">${cost(i) ? `<span class="cost">${cost(i)}</span>` : ''}<span class="where">${esc(i.where)}</span>${esc(i.msg)}</li>`;
+  const sc = res.score || { got: 0, max: 0 };
+  const tally = [`${errs.length} error${errs.length === 1 ? '' : 's'}`, parts.length ? `${parts.length} partly right` : '', notes.length ? `${notes.length} note${notes.length === 1 ? '' : 's'}` : ''].filter(Boolean).join(' · ');
   box.innerHTML = `
-    <div class="score ${errs.length ? 'dirty' : 'clean'}"><span class="num">${errs.length}</span><span class="lbl">${errs.length === 1 ? 'error' : 'errors'}</span>${notes.length ? `<span class="muted">· ${notes.length} note${notes.length === 1 ? '' : 's'}</span>` : ''}</div>
-    <p class="muted" style="margin:0">${errs.length ? 'Hover a mistake to see it on the paper. Click to select it.' : 'No mistakes found. Check the notes for accepted alternatives.'}</p>
+    <div class="score ${errs.length ? 'dirty' : parts.length ? 'part' : 'clean'}"><span class="num">${sc.got}</span><span class="of">/ ${sc.max}</span><span class="muted">${tally}</span></div>
+    <p class="muted" style="margin:0">${errs.length || parts.length ? 'Each mistake costs 1 mark and each partly right item ½, out of one mark per thing the answer key checks. Hover a mistake to see it on the paper. Click to select it.' : 'No mistakes found. Check the notes for accepted alternatives.'}</p>
     ${errs.length ? `<ul class="issues">${errs.map((i) => item(i, res.issues.indexOf(i))).join('')}</ul>` : ''}
+    ${parts.length ? `<h3 style="margin-top:14px">Partly right</h3><ul class="issues">${parts.map((i) => item(i, res.issues.indexOf(i))).join('')}</ul>` : ''}
     ${notes.length ? `<h3 style="margin-top:14px">Notes</h3><ul class="issues">${notes.map((i) => item(i, res.issues.indexOf(i))).join('')}</ul>` : ''}
     <div class="actions" style="margin-top:12px">
       <button class="btn" id="r-model" type="button">${S.view === 'model' ? 'Back to my diagram' : 'Show model answer'}</button>
@@ -1593,7 +1647,8 @@ function renderQuestion() {
 function renderTabs() {
   $('#qtabs').innerHTML = S.parts.map((P, i) => {
     const r = S.results[P.key];
-    const badge = r ? `<span class="badge ${r.errors ? 'bad' : 'ok'}">${r.errors ? r.errors + ' err' : '✓'}</span>` : '';
+    const perfect = r && !r.errors && !r.partials;
+    const badge = r ? `<span class="badge ${perfect ? 'ok' : 'bad'}">${perfect ? '✓' : r.score.got + '/' + r.score.max}</span>` : '';
     const dot = A.local[P.q.id] ? '<span class="dot" aria-label="edited in this browser"></span>' : '';
     return `<button class="qtab" type="button" role="tab" data-i="${i}" aria-selected="${i === S.cur}" title="${esc(P.q.title)}${dot ? ' (edited in this browser)' : ''}">${esc(P.label)}${dot}${badge}</button>`;
   }).join('');
@@ -1669,6 +1724,8 @@ function armed(act, btn, label) {
   return false;
 }
 const isEmptyDiagram = (d) => !d || (d.rows ? !d.lifelines.length && !d.rows.length : !d.nodes.length && !d.edges.length);
+// expected counts recorded for an example; partials only when there are some, to keep files short
+const expectOf = (r) => Object.assign({ errors: r.errors }, r.partials ? { partials: r.partials } : {}, { notes: r.notes });
 const diagramSize = (d) => (!d ? 'empty' : d.rows ? `${d.lifelines.length} lifelines, ${d.rows.length} rows` : `${d.nodes.length} boxes, ${d.edges.length} lines`);
 
 // ---- files ----
@@ -1913,7 +1970,7 @@ function examplesHTML(q, p) {
   return `<ul class="a-list">${(p.examples || []).map((ex, i) => {
       const st = exStatus[ex.name];
       const x = ex.expect || {};
-      const exp = [x.errors !== undefined ? `${x.errors} err` : x.errorsAtLeast !== undefined ? `≥${x.errorsAtLeast} err` : '', x.notes !== undefined ? `${x.notes} notes` : ''].filter(Boolean).join(' · ');
+      const exp = [x.errors !== undefined ? `${x.errors} err` : x.errorsAtLeast !== undefined ? `≥${x.errorsAtLeast} err` : '', x.partials ? `${x.partials} partial` : '', x.notes !== undefined ? `${x.notes} notes` : ''].filter(Boolean).join(' · ');
       return `<li class="${st && !st.ok ? 'bad' : ''}">
         <div class="a-exrow"><input ${bind('p', ['examples', i], 'name', 'text')} value="${esc(ex.name)}" aria-label="Example name"><span class="a-exp">${esc(exp)}</span><span class="a-st">${st ? (st.ok ? '✓' : '✗') : ''}</span></div>
         ${st && !st.ok ? `<div class="a-err">${esc(st.msg)}</div>` : ''}
@@ -2228,10 +2285,10 @@ $('#author').addEventListener('click', async (e) => {
       if ((p.examples || []).some((x) => x.name === name)) { toast('Use a different name; examples need unique names.'); return; }
       const r = UMLGrader.grade(p, d);
       const patch = UMLAuthor.diffPatch(p.model, d);
-      const ex = { name, expect: { errors: r.errors, notes: r.notes } };
+      const ex = { name, expect: expectOf(r) };
       if (patch.diagram) ex.diagram = patch.diagram; else ex.patch = patch;
       (p.examples = p.examples || []).push(ex);
-      toast(r.errors ? `Saved with ${r.errors} error${r.errors === 1 ? '' : 's'} and ${r.notes} note${r.notes === 1 ? '' : 's'}.` : 'Saved. Note: this example has no errors, so it records an accepted answer.');
+      toast(r.errors || r.partials ? `Saved with ${r.errors} error${r.errors === 1 ? '' : 's'}${r.partials ? `, ${r.partials} partly right` : ''} and ${r.notes} note${r.notes === 1 ? '' : 's'}.` : 'Saved. Note: this example has no errors, so it records an accepted answer.');
       break;
     }
     case 'loadex': {
@@ -2247,7 +2304,7 @@ $('#author').addEventListener('click', async (e) => {
     case 'acceptex': {
       const ex = p.examples[i];
       const r = UMLGrader.grade(p, UMLAuthor.exampleDiagram(p, ex));
-      ex.expect = { errors: r.errors, notes: r.notes };
+      ex.expect = expectOf(r);
       break;
     }
     case 'delex': p.examples.splice(i, 1); break;

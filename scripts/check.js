@@ -23,7 +23,7 @@ const only = args.filter((a) => !a.startsWith('-'));
 
 let failures = 0;
 const showIssues = (issues, all) => (issues || []).filter((i) => all || i.sev === 'error')
-  .forEach((i) => console.log(`      ${i.sev === 'error' ? 'E' : 'n'} [${i.where}] ${i.msg}`));
+  .forEach((i) => console.log(`      ${i.sev === 'error' ? 'E' : i.sev === 'partial' ? 'P' : 'n'} [${i.where}] ${i.msg}`));
 
 const index = JSON.parse(fs.readFileSync(path.join(QDIR, 'index.json'), 'utf8'));
 const files = fs.readdirSync(QDIR).filter((f) => f.endsWith('.json') && f !== 'index.json' && !f.startsWith('_'));
