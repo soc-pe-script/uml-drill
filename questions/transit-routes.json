@@ -1,0 +1,258 @@
+{
+  "id": "transit-routes",
+  "title": "Transit routes and tickets",
+  "source": "Original. Covers the ideas in the CS2103/T additional Part 1 practice (A and B): interface inheritance, a self-association, a bounded composition, a two-way association and a static method's parameter dependency.",
+  "author": "soc-pe-script",
+  "tags": ["class-diagram", "object-diagram", "interface", "abstract", "composition", "self-association", "static", "partial-credit"],
+  "code": [
+    { "file": "Listable.java", "text": "public interface Listable {\n}" },
+    { "file": "Searchable.java", "text": "public interface Searchable extends Listable {\n    boolean matches(String query);\n}" },
+    { "file": "Entry.java", "text": "public abstract class Entry implements Searchable {\n}" },
+    { "file": "Route.java", "text": "import java.util.ArrayList;\nimport java.util.List;\n\npublic class Route extends Entry {\n    protected boolean isFull;\n    private int stopCount = 0;\n    String code;\n    private Stop[] stops = new Stop[5];\n    private List<Ticket> sold = new ArrayList<>();\n\n    public Route(String code, String from, String to) {\n        this.code = code;\n        addStop(from);\n        addStop(to);\n    }\n\n    public void addStop(String name) {\n        if (stopCount < 5) {\n            stops[stopCount++] = new Stop(name);\n        }\n        isFull = stopCount == 5;\n    }\n\n    void sell(Ticket t) {\n        sold.add(t);\n    }\n\n    @Override\n    public boolean matches(String query) {\n        return code.equals(query);\n    }\n}" },
+    { "file": "Stop.java", "text": "public class Stop {\n    private String name;\n\n    public Stop(String name) {\n        this.name = name;\n    }\n\n    public static boolean canAdd(Route r) {\n        return !r.isFull;\n    }\n}" },
+    { "file": "Ticket.java", "text": "public class Ticket {\n    private final Route route;\n    private Ticket transfer;\n\n    public Ticket(Route route) {\n        this.route = route;\n        route.sell(this);\n    }\n\n    public void setTransfer(Ticket next) {\n        transfer = next;\n    }\n}" }
+  ],
+  "parts": [
+    {
+      "id": "a",
+      "mode": "class",
+      "prompt": "Draw a class diagram to represent the code. Show all attributes, methods, associations, navigabilities, visibilities, known multiplicities, and association roles. Show associations as lines.",
+      "canvas": { "width": 1000, "height": 640 },
+      "starter": { "nodes": [], "edges": [] },
+      "key": {
+        "classes": {
+          "Listable": { "stereo": "interface" },
+          "Searchable": {
+            "stereo": "interface",
+            "methods": [{ "name": "matches", "vis": "+", "params": [{ "name": "query", "type": "String" }], "ret": "boolean" }]
+          },
+          "Entry": { "stereo": "abstract" },
+          "Route": {
+            "attrs": [
+              { "name": "isFull", "vis": "#", "type": ["boolean"] },
+              { "name": "stopCount", "vis": "-", "type": ["int"] },
+              { "name": "code", "vis": "~", "type": ["String"] }
+            ],
+            "methods": [
+              { "name": "addStop", "vis": "+", "params": [{ "name": "name", "type": "String" }] },
+              { "name": "sell", "vis": "~", "params": [{ "name": "t", "type": "Ticket" }] },
+              { "name": "matches", "vis": "+", "params": [{ "name": "query", "type": "String" }], "ret": "boolean" }
+            ],
+            "optionalMethods": [
+              { "name": "Route", "vis": "+", "params": [{ "name": "code", "type": "String" }, { "name": "from", "type": "String" }, { "name": "to", "type": "String" }] }
+            ]
+          },
+          "Stop": {
+            "attrs": [{ "name": "name", "vis": "-", "type": ["String"] }],
+            "methods": [{ "name": "canAdd", "vis": "+", "params": [{ "name": "r", "type": "Route" }], "ret": "boolean", "static": true }],
+            "optionalMethods": [{ "name": "Stop", "vis": "+", "params": [{ "name": "name", "type": "String" }] }]
+          },
+          "Ticket": {
+            "methods": [{ "name": "setTransfer", "vis": "+", "params": [{ "name": "next", "type": "Ticket" }] }],
+            "optionalMethods": [{ "name": "Ticket", "vis": "+", "params": [{ "name": "route", "type": "Route" }] }]
+          }
+        },
+        "relations": [
+          {
+            "type": "inheritance", "from": "Searchable", "to": "Listable",
+            "typeHint": "Searchable extends Listable. One interface extending another is inheritance: a solid line with a hollow triangle.",
+            "mistakes": [
+              { "type": "realization", "credit": 0.5, "msg": "Right direction, wrong line. Searchable extends Listable; it does not implement it. Between two interfaces, use a solid line, not a dashed one." }
+            ]
+          },
+          {
+            "type": "realization", "from": "Entry", "to": "Searchable",
+            "typeHint": "Entry implements Searchable: a dashed line with a hollow triangle.",
+            "mistakes": [
+              { "type": "inheritance", "credit": 0.5, "msg": "Right direction, wrong line. Entry implements Searchable (a class implementing an interface), so the line is dashed." }
+            ]
+          },
+          { "type": "inheritance", "from": "Route", "to": "Entry", "typeHint": "Route extends Entry." },
+          {
+            "type": "composition", "from": "Route", "to": "Stop", "toMult": ["2..5"], "toRole": ["stops"],
+            "acceptTypes": ["association"],
+            "acceptNote": "A plain association is accepted. Route creates its own Stops and never shares them, so composition (a filled diamond at Route) is the stronger answer.",
+            "typeHint": "Route keeps its Stops in an array field and creates them itself.",
+            "mistakes": [
+              { "type": "aggregation", "credit": 0.5, "msg": "A hollow diamond (aggregation) means the parts can be shared. Route creates its Stops and nothing else holds them, so use composition: a filled diamond." },
+              { "toMult": "0..5", "credit": 0.5, "msg": "Close. The array holds at most 5 Stops, but the constructor always adds two, so a Route has 2..5 Stops." },
+              { "toMult": "5", "msg": "The array size is the most a Route can hold, not how many it has. The constructor adds 2 Stops and addStop() stops at 5, so 2..5." },
+              { "toMult": ["*", "1..*", "2..*"], "msg": "The array has room for only 5 Stops, so the upper bound is 5. The constructor adds 2, so 2..5." }
+            ]
+          },
+          {
+            "type": "association", "from": "Ticket", "to": "Route", "nav": "both",
+            "toMult": ["1"], "toRole": ["route"], "fromMult": ["*"], "fromRole": ["sold"],
+            "orTwoLines": true,
+            "typeHint": "Ticket keeps its Route in a field, and Route keeps the Tickets it sold in a list.",
+            "mistakes": [
+              { "toMult": "0..1", "credit": 0.5, "msg": "route is set in the constructor and is final, so every Ticket has exactly 1 Route." },
+              { "fromMult": "1..*", "credit": 0.5, "msg": "A new Route has sold no tickets yet, so its count starts at 0: * (or 0..*)." },
+              { "fromMult": "1", "msg": "A Route keeps a List of the Tickets it sold, so the multiplicity next to Ticket is *." }
+            ]
+          },
+          {
+            "type": "association", "from": "Ticket", "to": "Ticket", "nav": "to", "toMult": ["0..1"], "toRole": ["transfer"],
+            "typeHint": "A Ticket keeps another Ticket in its transfer field: a line from Ticket back to itself.",
+            "mistakes": [
+              { "toMult": "1", "credit": 0.5, "msg": "transfer starts as null and is only set by setTransfer(), so a Ticket has 0..1 transfer, not exactly 1." },
+              { "toMult": "*", "msg": "transfer is a single Ticket field, not a collection, so the multiplicity is 0..1." }
+            ]
+          },
+          {
+            "type": "dependency", "from": "Stop", "to": "Route", "optional": true,
+            "typeHint": "Stop has no Route field. canAdd() only takes a Route as a parameter, so at most a dependency (dashed arrow)."
+          }
+        ]
+      },
+      "model": {
+        "nodes": [
+          { "id": "searchable", "kind": "class", "stereo": "interface", "name": "Searchable", "attrs": [], "methods": ["+matches(query: String): boolean"], "x": 380, "y": 30 },
+          { "id": "listable", "kind": "class", "stereo": "interface", "name": "Listable", "attrs": [], "methods": [], "x": 740, "y": 40 },
+          { "id": "entry", "kind": "class", "stereo": "abstract", "name": "Entry", "attrs": [], "methods": [], "x": 450, "y": 170 },
+          { "id": "route", "kind": "class", "stereo": "", "name": "Route", "attrs": ["#isFull: boolean", "-stopCount: int = 0", "~code: String"], "methods": ["+addStop(name: String)", "~sell(t: Ticket)", "+matches(query: String): boolean"], "x": 420, "y": 280 },
+          { "id": "stop", "kind": "class", "stereo": "", "name": "Stop", "attrs": ["-name: String"], "methods": ["+Stop(name: String)", "+canAdd(r: Route): boolean {static}"], "x": 790, "y": 300 },
+          { "id": "ticket", "kind": "class", "stereo": "", "name": "Ticket", "attrs": [], "methods": ["+Ticket(route: Route)", "+setTransfer(next: Ticket)"], "x": 120, "y": 470 }
+        ],
+        "edges": [
+          { "id": "m1", "type": "inheritance", "from": "searchable", "to": "listable" },
+          { "id": "m2", "type": "realization", "from": "entry", "to": "searchable" },
+          { "id": "m3", "type": "inheritance", "from": "route", "to": "entry" },
+          { "id": "m4", "type": "composition", "from": "route", "to": "stop", "navTo": true, "toMult": "2..5", "toRole": "stops" },
+          { "id": "m5", "type": "association", "from": "ticket", "to": "route", "navTo": true, "navFrom": true, "toMult": "1", "toRole": "route", "fromMult": "*", "fromRole": "sold" },
+          { "id": "m6", "type": "association", "from": "ticket", "to": "ticket", "navTo": true, "toMult": "0..1", "toRole": "transfer" },
+          { "id": "m7", "type": "dependency", "from": "stop", "to": "route" }
+        ]
+      },
+      "examples": [
+        {
+          "name": "Realization between the two interfaces",
+          "expect": { "errors": 0, "partials": 1, "notes": 0 },
+          "patch": { "edges": { "m1": { "type": "realization" } } }
+        },
+        {
+          "name": "Aggregation with 0..5 Stops",
+          "expect": { "errors": 0, "partials": 2, "notes": 0 },
+          "patch": { "edges": { "m4": { "type": "aggregation", "toMult": "0..5" } } }
+        },
+        {
+          "name": "Plain association for the Stops is accepted",
+          "expect": { "errors": 0, "partials": 0, "notes": 1 },
+          "patch": { "edges": { "m4": { "type": "association" } } }
+        },
+        {
+          "name": "Ticket and Route as two one-way lines is accepted",
+          "expect": { "errors": 0, "partials": 0, "notes": 1 },
+          "patch": {
+            "edges": { "m5": { "navFrom": false, "fromMult": "", "fromRole": "" } },
+            "addEdges": [{ "id": "m8", "type": "association", "from": "route", "to": "ticket", "navTo": true, "toMult": "*", "toRole": "sold" }]
+          }
+        },
+        {
+          "name": "sold shown as an attribute and as a line",
+          "expect": { "errors": 1, "partials": 0 },
+          "patch": { "nodes": { "route": { "attrs": ["#isFull: boolean", "-stopCount: int = 0", "~code: String", "-sold: List<Ticket>"] } } }
+        },
+        {
+          "name": "One-way arrow to Route, transfer multiplicity 1",
+          "expect": { "errors": 1, "partials": 1 },
+          "patch": { "edges": { "m5": { "navFrom": false }, "m6": { "toMult": "1" } } }
+        },
+        {
+          "name": "Static not underlined, package visibility drawn as public",
+          "expect": { "errors": 2, "partials": 0 },
+          "patch": { "nodes": {
+            "stop": { "methods": ["+Stop(name: String)", "+canAdd(r: Route): boolean"] },
+            "route": { "attrs": ["#isFull: boolean", "-stopCount: int = 0", "+code: String"] }
+          } }
+        },
+        {
+          "name": "Stops multiplicity * (array bound ignored)",
+          "expect": { "errors": 1, "partials": 0 },
+          "patch": { "edges": { "m4": { "toMult": "*" } } }
+        },
+        {
+          "name": "Stop to Route drawn as an association",
+          "expect": { "errors": 1, "partials": 0 },
+          "patch": { "edges": { "m7": { "type": "association", "navTo": true } } }
+        }
+      ]
+    },
+    {
+      "id": "b",
+      "mode": "object",
+      "prompt": "Draw an object diagram for the objects that exist after this code runs:\nRoute r = new Route(\"R7\", \"Jurong\", \"Clementi\");\nTicket t = new Ticket(r);",
+      "canvas": { "width": 1000, "height": 420 },
+      "starter": { "nodes": [], "edges": [] },
+      "key": {
+        "objects": [
+          {
+            "ref": "route", "class": ["Route"],
+            "wrongClass": { "Entry": "This object is a Route. Show it as r:Route, its real class." },
+            "attrs": [{ "name": "code", "value": ["R7"] }],
+            "forbidAttrs": {
+              "stops": "The Stops are shown by the links to the two Stop objects. Don't also list them as an attribute.",
+              "sold": "The sold Ticket is shown by the link to the Ticket object. Don't also list it as an attribute."
+            }
+          },
+          { "ref": "stopA", "class": ["Stop"], "attrs": [{ "name": "name", "value": ["Jurong", "Clementi"] }] },
+          { "ref": "stopB", "class": ["Stop"], "attrs": [{ "name": "name", "value": ["Jurong", "Clementi"] }] },
+          {
+            "ref": "ticket", "class": ["Ticket"],
+            "forbidAttrs": { "route": "The Route is shown by the link. Don't also list it as an attribute." }
+          }
+        ],
+        "links": [{ "a": "route", "b": "stopA" }, { "a": "route", "b": "stopB" }, { "a": "ticket", "b": "route" }],
+        "extraObjectHints": {
+          "Entry": "There is only one route object. Show it once, as r:Route, not also as :Entry.",
+          "Searchable": "Searchable is an interface that Route implements. It is not a separate object.",
+          "Listable": "Listable is an interface. It is not a separate object.",
+          "Ticket": "Only one Ticket is created. transfer is still null, so there is no second Ticket."
+        }
+      },
+      "model": {
+        "nodes": [
+          { "id": "o1", "kind": "object", "name": "t:Ticket", "attrs": [], "methods": [], "x": 60, "y": 60 },
+          { "id": "o2", "kind": "object", "name": "r:Route", "attrs": ["code = \"R7\""], "methods": [], "x": 400, "y": 60 },
+          { "id": "o3", "kind": "object", "name": ":Stop", "attrs": ["name = \"Jurong\""], "methods": [], "x": 250, "y": 260 },
+          { "id": "o4", "kind": "object", "name": ":Stop", "attrs": ["name = \"Clementi\""], "methods": [], "x": 560, "y": 260 }
+        ],
+        "edges": [
+          { "id": "l1", "type": "link", "from": "o1", "to": "o2" },
+          { "id": "l2", "type": "link", "from": "o2", "to": "o3" },
+          { "id": "l3", "type": "link", "from": "o2", "to": "o4" }
+        ]
+      },
+      "examples": [
+        {
+          "name": "Stops listed as an attribute of the Route",
+          "expect": { "errors": 1 },
+          "patch": { "nodes": { "o2": { "attrs": ["code = \"R7\"", "stops = [Jurong, Clementi]"] } } }
+        },
+        {
+          "name": "Route drawn as :Entry, multiplicity on a link",
+          "expect": { "errors": 2 },
+          "patch": { "nodes": { "o2": { "name": "r:Entry" } }, "edges": { "l2": { "toMult": "2..5" } } }
+        },
+        {
+          "name": "Ticket not linked to the Route",
+          "expect": { "errors": 1 },
+          "patch": { "removeEdges": ["l1"] }
+        },
+        {
+          "name": "Second Ticket drawn for transfer",
+          "expect": { "errors": 1 },
+          "patch": {
+            "addNodes": [{ "id": "o5", "kind": "object", "name": ":Ticket", "attrs": [], "methods": [], "x": 60, "y": 260 }],
+            "addEdges": [{ "id": "l4", "type": "link", "from": "o1", "to": "o5" }]
+          }
+        },
+        {
+          "name": "Arrowheads on links are fine",
+          "expect": { "errors": 0, "notes": 1 },
+          "patch": { "edges": { "l1": { "navTo": true } } }
+        }
+      ]
+    }
+  ]
+}

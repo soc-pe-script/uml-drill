@@ -1,0 +1,127 @@
+{
+  "id": "oven-batch",
+  "title": "Baking a batch",
+  "source": "Original. Covers the ideas in the CS2103/T additional Part 1 practice (C): an object created inside a call, a chained call to unroll, a switch as an alt frame, and a self-call.",
+  "author": "soc-pe-script",
+  "tags": ["sequence-diagram", "object-creation", "chained-call", "alt-frame", "self-invocation", "partial-credit"],
+  "code": [
+    { "file": "Kitchen.java", "text": "public class Kitchen {\n    private Oven oven = new Oven();\n\n    public void prepare(int level) {\n        Tray t = oven.load();\n        t.getOven().heat(1);\n        switch (level) {\n        case 2:\n            oven.heat(2);\n            break;\n        case 3:\n            oven.heat(3);\n            break;\n        default:\n            break;\n        }\n        oven.finish();\n    }\n}" },
+    { "file": "Oven.java", "text": "public class Oven {\n    private int temp = 0;\n\n    public Tray load() {\n        return new Tray(this);\n    }\n\n    public void heat(int amount) {\n        temp += amount;\n    }\n\n    public void finish() {\n        heat(5);\n    }\n}" },
+    { "file": "Tray.java", "text": "public class Tray {\n    private final Oven oven;\n\n    public Tray(Oven oven) {\n        this.oven = oven;\n    }\n\n    public Oven getOven() {\n        return oven;\n    }\n}" }
+  ],
+  "parts": [
+    {
+      "id": "a",
+      "mode": "sequence",
+      "prompt": "Draw a sequence diagram for prepare(level) being called on a Kitchen object. Show activation bars and return values. Unroll t.getOven().heat(1) into separate calls, and show every case of the switch.",
+      "canvas": { "width": 1000, "height": 640 },
+      "starter": { "lifelines": [], "rows": [] },
+      "key": {
+        "lifelines": [
+          { "ref": "kitchen", "class": "Kitchen" },
+          { "ref": "oven", "class": "Oven" },
+          { "ref": "tray", "class": "Tray", "created": true }
+        ],
+        "entry": { "to": "kitchen", "method": "prepare", "args": 1 },
+        "body": [
+          { "call": "oven", "method": "load", "args": 0, "returns": "t, the new Tray",
+            "body": [{ "create": "tray", "args": 1 }] },
+          { "call": "tray", "method": "getOven", "args": 0, "returns": "the Oven" },
+          { "call": "oven", "method": "heat", "args": 1,
+            "mistakes": [
+              { "to": "tray", "msg": "t.getOven() returns the Oven, so heat(1) is sent to the Oven, not the Tray. Draw getOven() to the Tray first, then heat(1) to the Oven." }
+            ] },
+          { "frame": "alt",
+            "hint": "A switch whose cases make calls is an alt frame, with one part per case.",
+            "branches": [
+              { "guardExample": "[level == 2]", "body": [{ "call": "oven", "method": "heat", "args": 1 }] },
+              { "guardExample": "[level == 3]", "body": [{ "call": "oven", "method": "heat", "args": 1 }] },
+              { "guardExample": "[else]", "optional": true, "body": [] }
+            ],
+            "mistakes": [
+              { "frame": "opt", "credit": 0.5, "msg": "The calls in each case are right, but the cases of a switch exclude each other: only one runs. Show that with one alt frame and a part per case, not opt frames." },
+              { "frame": "loop", "msg": "A switch picks one case; it does not repeat. Use an alt frame with a part per case." }
+            ] },
+          { "call": "oven", "method": "finish", "args": 0,
+            "body": [{ "call": "oven", "method": "heat", "args": 1 }],
+            "mistakes": [
+              { "method": "heat", "msg": "Kitchen calls finish(), not heat(5). heat(5) happens inside finish(): draw finish() to the Oven, then heat(5) as a self-call on the Oven." }
+            ] }
+        ]
+      },
+      "model": {
+        "lifelines": [
+          { "id": "kitchen", "name": ":Kitchen", "kind": "object" },
+          { "id": "oven", "name": ":Oven", "kind": "object" },
+          { "id": "tray", "name": "t:Tray", "kind": "object" }
+        ],
+        "rows": [
+          { "id": "r1", "type": "call", "from": "@start", "to": "kitchen", "label": "prepare(level)" },
+          { "id": "r2", "type": "call", "from": "kitchen", "to": "oven", "label": "load()" },
+          { "id": "r3", "type": "create", "from": "oven", "to": "tray", "label": "Tray(this)" },
+          { "id": "r4", "type": "return", "from": "tray", "to": "oven", "label": "" },
+          { "id": "r5", "type": "return", "from": "oven", "to": "kitchen", "label": "t" },
+          { "id": "r6", "type": "call", "from": "kitchen", "to": "tray", "label": "getOven()" },
+          { "id": "r7", "type": "return", "from": "tray", "to": "kitchen", "label": "oven" },
+          { "id": "r8", "type": "call", "from": "kitchen", "to": "oven", "label": "heat(1)" },
+          { "id": "r9", "type": "return", "from": "oven", "to": "kitchen", "label": "" },
+          { "id": "r10", "type": "frame", "frame": "alt", "guard": "level == 2" },
+          { "id": "r11", "type": "call", "from": "kitchen", "to": "oven", "label": "heat(2)" },
+          { "id": "r12", "type": "return", "from": "oven", "to": "kitchen", "label": "" },
+          { "id": "r13", "type": "else", "guard": "level == 3" },
+          { "id": "r14", "type": "call", "from": "kitchen", "to": "oven", "label": "heat(3)" },
+          { "id": "r15", "type": "return", "from": "oven", "to": "kitchen", "label": "" },
+          { "id": "r16", "type": "end" },
+          { "id": "r17", "type": "call", "from": "kitchen", "to": "oven", "label": "finish()" },
+          { "id": "r18", "type": "call", "from": "oven", "to": "oven", "label": "heat(5)" },
+          { "id": "r19", "type": "return", "from": "oven", "to": "oven", "label": "" },
+          { "id": "r20", "type": "return", "from": "oven", "to": "kitchen", "label": "" },
+          { "id": "r21", "type": "return", "from": "kitchen", "to": "@start", "label": "" }
+        ]
+      },
+      "examples": [
+        {
+          "name": "heat(1) sent to the Tray",
+          "expect": { "errors": 1, "partials": 0 },
+          "patch": { "rows": { "r8": { "to": "tray" }, "r9": { "from": "tray" } } }
+        },
+        {
+          "name": "Switch drawn as two opt frames",
+          "expect": { "errors": 0, "partials": 1, "notes": 0 },
+          "patch": {
+            "rows": { "r10": { "frame": "opt" }, "r13": { "type": "end" } },
+            "addRows": [{ "after": "r13", "row": { "id": "x1", "type": "frame", "frame": "opt", "guard": "level == 3" } }]
+          }
+        },
+        {
+          "name": "Empty [else] part is accepted",
+          "expect": { "errors": 0, "partials": 0, "notes": 0 },
+          "patch": { "addRows": [{ "after": "r15", "row": { "id": "x2", "type": "else", "guard": "else" } }] }
+        },
+        {
+          "name": "heat(5) sent by Kitchen instead of finish()",
+          "expect": { "errors": 1, "partials": 0 },
+          "patch": { "rows": { "r17": { "label": "heat(5)" } }, "removeRows": ["r18", "r19"] }
+        },
+        {
+          "name": "Chained call drawn as one heat(1) to the Tray",
+          "expect": { "errors": 2, "partials": 0 },
+          "patch": { "removeRows": ["r6", "r7"], "rows": { "r8": { "to": "tray" }, "r9": { "from": "tray" } } }
+        },
+        {
+          "name": "Tray created by Kitchen before load()",
+          "expect": { "errors": 1, "partials": 0 },
+          "patch": {
+            "rows": { "r3": { "from": "kitchen" }, "r4": { "to": "kitchen" } },
+            "order": ["r1", "r3", "r4", "r2", "r5", "r6", "r7", "r8", "r9", "r10", "r11", "r12", "r13", "r14", "r15", "r16", "r17", "r18", "r19", "r20", "r21"]
+          }
+        },
+        {
+          "name": "Switch drawn as one loop around both calls",
+          "expect": { "errors": 1, "partials": 0 },
+          "patch": { "rows": { "r10": { "frame": "loop" } }, "removeRows": ["r13"] }
+        }
+      ]
+    }
+  ]
+}
