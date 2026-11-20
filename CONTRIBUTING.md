@@ -53,7 +53,7 @@ Node 18 or newer is the only requirement. There are no dependencies to install.
 ```jsonc
 {
   "id": "a",                          // shown as Q3 (a)
-  "mode": "class",                    // "class" or "object"
+  "mode": "class",                    // "class", "object", "sequence" or "activity"
   "prompt": "Draw a class diagram ...",
   "canvas": { "width": 1000, "height": 640 },
   "starter": { "nodes": [...], "edges": [] },   // the given layout; empty for "draw from scratch"
@@ -183,6 +183,58 @@ The key describes the expected call tree, not the drawing:
 
 Sequence examples patch rows instead of edges: `"rows": { "r3": { "to": "b" } }`, `"removeRows"`, `"addRows": [{ "after": "r8", "row": { ... } }]`, `"lifelines": { ... }`, or `"order": [every row id in the new order]`.
 
+### Activity diagrams
+
+An activity part has `"mode": "activity"`. Activity questions usually describe a process in words, so `code` can hold a `.txt` file (it is shown as plain text, not Java). The diagram uses nodes and flows:
+
+```jsonc
+"model": {
+  "nodes": [
+    { "id": "start", "kind": "start", "name": "", "x": 487, "y": 20 },
+    { "id": "scan", "kind": "action", "name": "Scan parcel", "x": 440, "y": 200 },
+    { "id": "d1", "kind": "decision", "name": "", "x": 480, "y": 270 },       // branch or merge diamond
+    { "id": "fork", "kind": "bar", "name": "", "x": 300, "y": 480, "w": 400 }, // fork or join bar
+    { "id": "end1", "kind": "end", "name": "", "x": 758, "y": 420 }
+  ],
+  "edges": [
+    { "id": "f5", "type": "flow", "from": "d1", "to": "aside", "guard": "not recognised" },
+    { "id": "f19", "type": "flow", "from": "d3", "to": "m1", "guard": "more parcels", "route": "right" } // around the right or left, for loops
+  ]
+}
+```
+
+The key lists the actions and the flows between them:
+
+```jsonc
+"key": {
+  "actions": [
+    { "ref": "scan", "label": "Scan parcel", "name": ["scan"] },            // label: shown in feedback
+    { "ref": "aside", "label": "Set parcel aside", "name": ["aside", "depot"] }
+  ],
+  "flows": [
+    { "from": "start", "to": "login" },
+    { "from": "scan", "to": "aside", "guard": ["not recognised", "unknown", "invalid"] },
+    { "from": ["aside", "delivered"], "to": "scan", "guard": ["more parcels", "more"] }, // two paths into one place
+    { "from": "open", "to": ["place", "send"], "via": "fork" },             // one fork
+    { "from": ["place", "send"], "to": "delivered", "via": "join" },        // one join
+    { "from": "login", "to": "logout", "optional": true }                   // another accepted way to draw it
+  ],
+  "allowExtra": ["close door"]        // extra actions that are not counted as mistakes
+}
+```
+
+How it is graded:
+- **Actions match by their words.** A student's action matches when it contains every word of one `name` phrase. Word order, filler words ("the", "a", "to"), plurals and -ed/-ing endings are ignored, and "not"/"no" must agree. So `["scan"]` matches "Scan the barcode", and `["no more"]` does not match "more parcels". Keep phrases short.
+- **Flows are compared step by step.** The student's diagram is reduced to steps from one action (or start/end) to the next, through any diamonds and bars. So a separate merge diamond, a combined merge+branch diamond, or one 3-way diamond in place of two nested ones all grade the same. `from` and `to` are action refs, `"start"` or `"end"`.
+- **Guards match the same way** as action names, against any guard on the path. The first phrase is shown in feedback, so make it the clearest. Include `""` if no guard is needed. A guard that matches nothing in the list is a partial (½), because it may just be other words. A guard that belongs to another flow from the same place is an error (swapped guards).
+- `via: "fork"` needs a fork bar on the path and `via: "join"` a join bar. A path through a bar where the key has no `via` is an error.
+- **One mistake, one deduction.** A missing action costs one mark if the student joined up the steps around it. An extra action costs one mark and does not break the flows through it. An action worded differently but in the right place is a partial (½).
+- Checked without a key: one start node, at least one end node, a guard on every flow out of a branch, different guards on one branch, nothing flowing into a start or out of an end. Two flows leaving an action, or two entering one directly, are partials (½): use a diamond or a bar. [yes]/[no] guards out of a diamond with a question in it are read using the question, with a note.
+
+`mistakes` on an activity flow can match `to` (the path goes to that ref instead), `guard` (the student's guard says this), or `via`: `"sequence"` (parallel steps drawn one after the other), `"decision"` (a branch diamond where the key has a fork), `"merge"` (a merge diamond where the key has a join) or `"fork"` (a bar where nothing runs in parallel).
+
+The score is one mark per action, one for the start node, one for an end node, and one per required flow.
+
 ## Handling ambiguity
 
 CS2103T marking is flexible, and questions will often be ambiguous. Encode that in the key instead of picking one answer:
@@ -198,12 +250,14 @@ CS2103T marking is flexible, and questions will often be ambiguous. Encode that 
 | A two-way association may be one line or two one-way lines | `"nav": "both"` with `fromMult`/`fromRole`, plus `"orTwoLines": true` |
 | An `alt` part may be left out (an empty `[else]`, say) | `"optional": true` on that branch; optional branches go last |
 | An answer is half right | a `mistakes` entry with `"credit": 0.5` (see below) |
+| An action can be worded several ways | more phrases in its `name`, e.g. `["log out", "logout", "sign out"]` |
+| An activity can be drawn along a different valid path | add that flow with `"optional": true` |
 
 Accepted alternatives show up as **notes**, not errors. If you're unsure whether something is acceptable, make it accepted with a note, and say so in the PR so a reviewer can decide.
 
 ## Scores, partial credit and known mistakes
 
-Every part is scored. It is worth one mark per thing the key checks: each class, required attribute and method, required relation (two for `orTwoLines`), object, object attribute and link, lifeline, call, creation and frame. Set `"marks"` on the part to override the total. An **error** costs 1 mark, a **partial** costs `1 - credit`, and a **note** is free.
+Every part is scored. It is worth one mark per thing the key checks: each class, required attribute and method, required relation (two for `orTwoLines`), object, object attribute and link, lifeline, call, creation and frame, and each action, required flow, start and end node. Set `"marks"` on the part to override the total. An **error** costs 1 mark, a **partial** costs `1 - credit`, and a **note** is free.
 
 `mistakes` names common wrong answers and says exactly what to tell the student. When the drawing matches one, its `msg` replaces the generic message. Add `credit` (between 0 and 1) to make it partly right instead of wrong:
 
@@ -221,6 +275,11 @@ Every part is scored. It is worth one mark per thing the key checks: each class,
 ]
 // on a sequence frame: the wrong kind of frame
 "mistakes": [{ "frame": "opt", "credit": 0.5, "msg": "The cases exclude each other: use one alt frame." }]
+// on an activity flow: where the path goes instead, a guard, or how parallel steps were drawn
+"mistakes": [
+  { "to": "login", "credit": 0.5, "msg": "The courier logs in once; the loop goes back to scanning." },
+  { "via": "merge", "credit": 0.5, "msg": "Wait for both: use a join bar, not a merge diamond." }
+]
 ```
 
 Only give credit where a marker would give part marks: the idea is right but the notation is off, or the answer is close. A partly right line is still checked for direction, multiplicities and roles.

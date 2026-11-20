@@ -134,6 +134,13 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .node.sel rect.box { stroke: var(--accent); stroke-width: 2.4; }
 .node.pending rect.box { stroke: var(--accent); stroke-dasharray: 5 3; stroke-width: 2.4; }
 .node.hl rect.box { stroke: var(--err); stroke-width: 2.6; }
+.node circle.box, .node polygon.box { fill: var(--panel); stroke: var(--ink); stroke-width: 1.3; }
+.node .solid, .node circle.box.solid, .node rect.box.solid { fill: var(--ink); stroke: var(--ink); }
+.node.sel .box { stroke: var(--accent); stroke-width: 2.4; }
+.node.pending .box { stroke: var(--accent); stroke-dasharray: 5 3; stroke-width: 2.4; }
+.node.hl .box { stroke: var(--err); stroke-width: 2.6; }
+.node text.dtext { font-size: 11.5px; }
+.codefile pre.prose { white-space: pre-wrap; font-family: var(--f-body); font-size: 13px; }
 .edge .stroke { stroke: var(--ink); stroke-width: 1.4; fill: none; }
 .edge .dash { stroke-dasharray: 7 5; }
 .edge .deco { stroke: var(--ink); stroke-width: 1.4; fill: var(--panel); stroke-linejoin: round; }
@@ -398,7 +405,24 @@ const LINE_TOOLS = [
   { id: 'aggregation', label: 'Aggregation', type: 'aggregation', hint: 'click the whole, then the part.' },
   { id: 'link', label: 'Object link', type: 'link', hint: 'click one object, then the other.' },
 ];
+const ACT_BOX_TOOLS = [
+  { id: 'a-start', label: 'Start', node: { kind: 'start', name: '' } },
+  { id: 'a-action', label: 'Action', node: { kind: 'action', name: 'New action' } },
+  { id: 'a-decision', label: 'Branch / merge', node: { kind: 'decision', name: '' } },
+  { id: 'a-bar', label: 'Fork / join', node: { kind: 'bar', name: '', w: 220 } },
+  { id: 'a-end', label: 'End', node: { kind: 'end', name: '' } },
+];
+const ACT_LINE_TOOLS = [
+  { id: 'a-flow', label: 'Flow', type: 'flow', hint: 'click where the flow starts, then where it goes.' },
+];
+const boxTools = () => (isAct() ? ACT_BOX_TOOLS : BOX_TOOLS);
 const GLYPH = {
+  'a-start': '<circle class="g-solid" cx="15" cy="10" r="5.5"/>',
+  'a-action': '<rect class="g-fill" x="3" y="4" width="24" height="12" rx="5"/>',
+  'a-decision': '<path class="g-fill" d="M15 2l8 8-8 8-8-8z"/>',
+  'a-bar': '<rect class="g-solid" x="3" y="8" width="24" height="4" rx="1"/>',
+  'a-end': '<circle class="g-fill" cx="15" cy="10" r="7"/><circle class="g-solid" cx="15" cy="10" r="3.8"/>',
+  'a-flow': '<path class="g-ink" d="M2 10h25M21 6l6 4-6 4"/>',
   class: '<rect class="g-fill" x="4" y="2" width="22" height="16" rx="1"/><path class="g-ink" d="M4 7.5h22M4 12.5h22"/>',
   interface: '<rect class="g-fill" x="4" y="2" width="22" height="16" rx="1"/><path class="g-ink" d="M4 9h22"/><text x="15" y="7.6" font-size="5.5" text-anchor="middle" fill="currentColor" font-family="monospace">«i»</text>',
   abstract: '<rect class="g-fill" x="4" y="2" width="22" height="16" rx="1"/><path class="g-ink" d="M4 9h22"/><text x="15" y="8" font-size="7" font-style="italic" text-anchor="middle" fill="currentColor" font-family="serif">A</text>',
@@ -420,6 +444,10 @@ function renderToolbox() {
   const tile = (t, cls) => `<button type="button" class="tile ${cls}" data-tool="${t.id}" aria-pressed="${S.tool && S.tool.id === t.id}"><svg viewBox="0 0 30 20" aria-hidden="true">${GLYPH[t.id]}</svg>${esc(t.label)}</button>`;
   if (isSeq()) {
     tb.innerHTML = '<h2>Lifelines</h2>' + SEQ_LIFE_TOOLS.map((t) => tile(t, 'box')).join('') + '<h2>Messages</h2>' + SEQ_MSG_TOOLS.map((t) => tile(t, 'line')).join('') + '<h2>Frames</h2>' + SEQ_FRAME_TOOLS.map((t) => tile(t, 'line')).join('');
+    return;
+  }
+  if (isAct()) {
+    tb.innerHTML = '<h2>Nodes</h2>' + ACT_BOX_TOOLS.map((t) => tile(t, 'box')).join('') + '<h2>Lines</h2>' + ACT_LINE_TOOLS.map((t) => tile(t, 'line')).join('');
     return;
   }
   tb.innerHTML = '<h2>Boxes</h2>' + BOX_TOOLS.map((t) => tile(t, 'box')).join('') + '<h2>Lines</h2>' + LINE_TOOLS.map((t) => tile(t, 'line')).join('');
@@ -459,6 +487,32 @@ function layoutNode(n) {
   const hAttr = attrs.length ? attrs.length * LH + 8 : 14;
   const hMeth = showMeth ? (methods.length ? methods.length * LH + 8 : 14) : 0;
   return { w, h: hHead + hAttr + hMeth, hHead, hAttr, hMeth, head, attrs, methods, showMeth };
+}
+
+function wrapText(s, maxW, size = 12.5) {
+  const out = [];
+  let cur = '';
+  for (const w of String(s).split(/\s+/).filter(Boolean)) {
+    const t = cur ? cur + ' ' + w : w;
+    if (cur && tw(t, size) > maxW) { out.push(cur); cur = w; } else cur = t;
+  }
+  if (cur) out.push(cur);
+  return out.length ? out : [''];
+}
+/** Size of an activity node; actions and labelled diamonds wrap their text. */
+function layoutAct(n) {
+  if (n.kind === 'start') return { w: 26, h: 26 };
+  if (n.kind === 'end') return { w: 28, h: 28 };
+  if (n.kind === 'bar') return { w: Math.max(40, +n.w || 220), h: 8 };
+  const name = String(n.name || '').trim();
+  if (n.kind === 'decision') {
+    if (!name) return { w: 40, h: 40, lines: [] };
+    const lines = wrapText(name, 120, 11.5);
+    const tW = Math.max(...lines.map((l) => tw(l, 11.5)));
+    return { w: Math.ceil(tW * 2 + 24), h: Math.max(50, lines.length * 15 * 2 + 18), lines };
+  }
+  const lines = wrapText(name || 'Action', 200);
+  return { w: Math.min(260, Math.max(120, Math.ceil(Math.max(...lines.map((l) => tw(l))) + 28))), h: Math.max(44, lines.length * 17 + 20), lines, ph: !name };
 }
 
 // ---------------- svg helpers ----------------
@@ -501,7 +555,7 @@ function renderCanvas() {
   boxes = {};
   const layouts = {};
   for (const n of d.nodes) {
-    const L = layoutNode(n);
+    const L = isAct() ? layoutAct(n) : layoutNode(n);
     layouts[n.id] = L;
     boxes[n.id] = { x: n.x, y: n.y, w: L.w, h: L.h };
   }
@@ -526,8 +580,15 @@ function renderCanvas() {
   const pk = (e) => [e.from, e.to].sort().join('|');
   for (const e of d.edges) pairCount[pk(e)] = (pairCount[pk(e)] || 0) + 1;
   const selfIdx = {};
+  const routeK = { left: 0, right: 0 };
   for (const e of d.edges) {
     if (!boxes[e.from] || !boxes[e.to]) continue;
+    if (isAct()) {
+      if (e.route === 'left' || e.route === 'right') { drawFlow(gE, e, 0, routeK[e.route]++); continue; }
+      const k = pk(e), i = (pairIdx[k] = (pairIdx[k] ?? -1) + 1);
+      drawFlow(gE, e, ([e.from, e.to].sort()[0] === e.from ? 1 : -1) * (i - (pairCount[k] - 1) / 2), 0);
+      continue;
+    }
     if (e.from === e.to) { selfIdx[e.from] = (selfIdx[e.from] ?? -1) + 1; drawSelfEdge(gE, e, selfIdx[e.from]); continue; }
     const k = pk(e);
     const i = (pairIdx[k] = (pairIdx[k] ?? -1) + 1);
@@ -537,7 +598,72 @@ function renderCanvas() {
   }
 
   // nodes
-  for (const n of d.nodes) drawNode(svg, n, layouts[n.id]);
+  for (const n of d.nodes) (isAct() ? drawActNode : drawNode)(svg, n, layouts[n.id]);
+}
+
+function drawActNode(parent, n, L) {
+  const cls = ['node'];
+  if (S.view === 'mine' && S.sel && S.sel.kind === 'node' && S.sel.id === n.id) cls.push('sel');
+  if (S.pending === n.id) cls.push('pending');
+  if (S.hl && S.hl.node === n.id) cls.push('hl');
+  const g = el('g', { class: cls.join(' '), transform: `translate(${n.x},${n.y})`, 'data-node': n.id }, parent);
+  const mid = (lines, size, cl) => lines.forEach((t, i) => text(g, L.w / 2, L.h / 2 + (i - (lines.length - 1) / 2) * (size + 4) + size * 0.36, t, { anchor: 'middle', cls: cl }));
+  if (n.kind === 'start') el('circle', { class: 'box solid', cx: 13, cy: 13, r: 13 }, g);
+  else if (n.kind === 'end') { el('circle', { class: 'box', cx: 14, cy: 14, r: 13.5 }, g); el('circle', { class: 'solid', cx: 14, cy: 14, r: 8 }, g); }
+  else if (n.kind === 'bar') { el('rect', { class: 'hit-r', x: -4, y: -9, width: L.w + 8, height: L.h + 18 }, g); el('rect', { class: 'box solid', x: 0, y: 0, width: L.w, height: L.h, rx: 1.5 }, g); }
+  else if (n.kind === 'decision') { el('polygon', { class: 'box', points: pts([{ x: L.w / 2, y: 0 }, { x: L.w, y: L.h / 2 }, { x: L.w / 2, y: L.h }, { x: 0, y: L.h / 2 }]) }, g); mid(L.lines, 11.5, 'dtext'); }
+  else { el('rect', { class: 'box', x: 0, y: 0, width: L.w, height: L.h, rx: 12 }, g); mid(L.lines, 12.5, L.ph ? 'ph' : null); }
+}
+
+/** Point where a line from c toward "toward" leaves an activity node's shape. */
+function actEdgePoint(n, b, c, toward) {
+  const dx = toward.x - c.x, dy = toward.y - c.y, len = Math.hypot(dx, dy) || 1;
+  if (n.kind === 'start' || n.kind === 'end') return { x: c.x + (dx / len) * (b.w / 2), y: c.y + (dy / len) * (b.h / 2) };
+  if (n.kind === 'decision') { const t = 1 / (Math.abs(dx) / (b.w / 2) + Math.abs(dy) / (b.h / 2) || 1); return { x: c.x + dx * t, y: c.y + dy * t }; }
+  return clip(c, toward, b);
+}
+/** A control flow: straight, or around the left/right of everything in between (for loops back up). */
+function drawFlow(parent, e, offsetIndex, routeIdx) {
+  const A = boxes[e.from], B = boxes[e.to];
+  const nA = nodeById(e.from), nB = nodeById(e.to);
+  const cls = ['edge'];
+  if (S.view === 'mine' && S.sel && S.sel.kind === 'edge' && S.sel.id === e.id) cls.push('sel');
+  if (S.hl && S.hl.edge === e.id) cls.push('hl');
+  const g = el('g', { class: cls.join(' '), 'data-edge': e.id }, parent);
+  const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+  let path;
+  if (e.route === 'left' || e.route === 'right') {
+    const right = e.route === 'right';
+    const ya = A.y + A.h / 2, yb = B.y + B.h / 2;
+    const lo = Math.min(A.y, B.y), hi = Math.max(A.y + A.h, B.y + B.h);
+    const span = Object.values(boxes).filter((b) => b.y < hi && b.y + b.h > lo);
+    const X = right ? Math.max(...span.map((b) => b.x + b.w)) + 30 + routeIdx * 16 : Math.max(8, Math.min(...span.map((b) => b.x)) - 30 - routeIdx * 16);
+    path = [{ x: right ? A.x + A.w : A.x, y: ya }, { x: X, y: ya }, { x: X, y: yb }, { x: right ? B.x + B.w : B.x, y: yb }];
+  } else {
+    const ca = { x: A.x + A.w / 2, y: A.y + A.h / 2 }, cb = { x: B.x + B.w / 2, y: B.y + B.h / 2 };
+    if (nA.kind === 'bar' && nB.kind === 'bar') { const x = (Math.max(A.x, B.x) + Math.min(A.x + A.w, B.x + B.w)) / 2; ca.x = cb.x = x; }
+    else if (nA.kind === 'bar') ca.x = clamp(cb.x, A.x + 12, A.x + A.w - 12);
+    else if (nB.kind === 'bar') cb.x = clamp(ca.x, B.x + 12, B.x + B.w - 12);
+    const len = Math.hypot(cb.x - ca.x, cb.y - ca.y) || 1;
+    const off = offsetIndex * 18, ox = (-(cb.y - ca.y) / len) * off, oy = ((cb.x - ca.x) / len) * off;
+    const sa = { x: ca.x + ox, y: ca.y + oy }, sb = { x: cb.x + ox, y: cb.y + oy };
+    path = [actEdgePoint(nA, A, sa, sb), actEdgePoint(nB, B, sb, sa)];
+  }
+  const tip = path[path.length - 1], prev = path[path.length - 2];
+  const sl = Math.hypot(tip.x - prev.x, tip.y - prev.y) || 1, ux = (tip.x - prev.x) / sl, uy = (tip.y - prev.y) / sl;
+  el('polyline', { class: 'stroke', points: pts(path), fill: 'none' }, g);
+  el('polyline', { class: 'deco open', points: pts([{ x: tip.x - ux * 11 - uy * 6, y: tip.y - uy * 11 + ux * 6 }, tip, { x: tip.x - ux * 11 + uy * 6, y: tip.y - uy * 11 - ux * 6 }]) }, g);
+  el('polyline', { class: 'hit', points: pts(path), fill: 'none' }, g);
+  const guard = String(e.guard || '').trim().replace(/^\[\s*|\s*\]$/g, '');
+  if (guard) {
+    // near the diamond it leaves, beside the first segment
+    const p0 = path[0], p1 = path[1];
+    const l0 = Math.hypot(p1.x - p0.x, p1.y - p0.y) || 1, vx = (p1.x - p0.x) / l0, vy = (p1.y - p0.y) / l0;
+    const along = nA.kind === 'decision' ? Math.min(20, l0 / 2) : l0 / 2;
+    const bx = p0.x + vx * along, by = p0.y + vy * along;
+    if (Math.abs(vx) >= Math.abs(vy)) text(g, bx + (vx > 0 ? 2 : -2), by - 6, `[${guard}]`, { anchor: vx > 0 ? 'start' : 'end' });
+    else text(g, bx + 7, by + (vy > 0 ? 10 : -4), `[${guard}]`, { anchor: 'start' });
+  }
 }
 
 function drawNode(parent, n, L) {
@@ -675,7 +801,8 @@ svg.addEventListener('pointerdown', (evt) => {
       if (!S.pending) { S.pending = id; renderStatus(); renderCanvas(); return; }
       // the same box twice makes a self-association; other line types cannot point at their own class
       if (id === S.pending && !['association', 'composition', 'aggregation'].includes(S.tool.type)) return;
-      const e = { id: uid('e'), type: S.tool.type, from: S.pending, to: id, navTo: !!S.tool.navTo, navFrom: false, fromMult: '', toMult: '', fromRole: '', toRole: '', label: '' };
+      const e = S.tool.type === 'flow' ? { id: uid('e'), type: 'flow', from: S.pending, to: id, guard: '' }
+        : { id: uid('e'), type: S.tool.type, from: S.pending, to: id, navTo: !!S.tool.navTo, navFrom: false, fromMult: '', toMult: '', fromRole: '', toRole: '', label: '' };
       d.edges.push(e);
       S.pending = null; S.tool = null;
       select({ kind: 'edge', id: e.id });
@@ -711,7 +838,7 @@ svg.addEventListener('pointerup', endDrag);
 svg.addEventListener('pointercancel', endDrag);
 svg.addEventListener('dblclick', () => {
   if (!S.sel) return;
-  const f = S.sel.kind === 'node' ? $('#f-name') : S.sel.kind === 'life' ? $('#s-name') : ($('#s-label') || $('#s-guard'));
+  const f = S.sel.kind === 'node' ? $('#f-name') : S.sel.kind === 'life' ? $('#s-name') : ($('#s-label') || $('#s-guard') || $('#f-guard'));
   if (f) { f.focus(); if (f.select) f.select(); }
 });
 
@@ -731,11 +858,11 @@ $('#toolbox').addEventListener('pointerdown', (evt) => {
   tdrag = { id: t.dataset.tool, x: evt.clientX, y: evt.clientY, ghost: null };
 });
 document.addEventListener('pointermove', (evt) => {
-  if (!tdrag || isSeq() || !BOX_TOOLS.some((b) => b.id === tdrag.id)) return;
+  if (!tdrag || isSeq() || !boxTools().some((b) => b.id === tdrag.id)) return;
   if (!tdrag.ghost && Math.hypot(evt.clientX - tdrag.x, evt.clientY - tdrag.y) > 6) {
     tdrag.ghost = document.createElement('div');
     tdrag.ghost.className = 'ghost';
-    tdrag.ghost.textContent = BOX_TOOLS.find((b) => b.id === tdrag.id).label;
+    tdrag.ghost.textContent = boxTools().find((b) => b.id === tdrag.id).label;
     document.body.appendChild(tdrag.ghost);
   }
   if (tdrag.ghost) { tdrag.ghost.style.left = evt.clientX + 8 + 'px'; tdrag.ghost.style.top = evt.clientY + 8 + 'px'; }
@@ -763,8 +890,8 @@ $('#toolbox').addEventListener('click', (evt) => {
 function pickTool(id) {
   if (S.view === 'model') showMine();
   if (isSeq() && SEQ_LIFE_TOOLS.some((b) => b.id === id)) { addLifeline(id); return; }
-  if (!isSeq() && BOX_TOOLS.some((b) => b.id === id)) { addBox(id); return; }
-  const t = (isSeq() ? SEQ_ALL_TOOLS : LINE_TOOLS).find((l) => l.id === id);
+  if (!isSeq() && boxTools().some((b) => b.id === id)) { addBox(id); return; }
+  const t = (isSeq() ? SEQ_ALL_TOOLS : isAct() ? ACT_LINE_TOOLS : LINE_TOOLS).find((l) => l.id === id);
   if (!t) return;
   if (S.tool && S.tool.id === id) { cancelTool(); return; }
   S.tool = t; S.pending = null;
@@ -783,9 +910,9 @@ function freeSpot() {
 }
 function addBox(toolId, at) {
   if (S.view === 'model') showMine();
-  const t = BOX_TOOLS.find((b) => b.id === toolId);
+  const t = boxTools().find((b) => b.id === toolId);
   const pos = at || freeSpot();
-  const n = Object.assign({ id: uid('n'), attrs: [], methods: [] }, clone(t.node), { x: Math.max(0, pos.x), y: Math.max(0, pos.y) });
+  const n = Object.assign(isAct() ? { id: uid('n') } : { id: uid('n'), attrs: [], methods: [] }, clone(t.node), { x: Math.max(0, pos.x), y: Math.max(0, pos.y) });
   curDiagram().nodes.push(n);
   S.tool = null; S.pending = null;
   renderToolbox();
@@ -815,6 +942,7 @@ function deleteSel() {
 
 // ================= sequence diagrams =================
 const isSeq = () => !!curPart() && curPart().p.mode === 'sequence';
+const isAct = () => !!curPart() && curPart().p.mode === 'activity';
 const SEQ_LIFE_TOOLS = [
   { id: 'lifeline', label: 'Object lifeline', life: { kind: 'object', name: ':NewClass' } },
   { id: 'classlife', label: 'Class lifeline', life: { kind: 'class', name: 'NewClass' } },
@@ -1316,6 +1444,7 @@ function renderStatus() {
     return;
   }
   const P = curPart();
+  if (isAct()) { st.textContent = 'Add a start node, actions, diamonds and bars from the toolbox, then join them with Flow. Click a flow to give it a guard or route it around the side.'; return; }
   if (isSeq()) { st.textContent = 'Add lifelines, then messages top to bottom. Activation bars are drawn for you from the calls and returns. Drag a message up or down to reorder.'; return; }
   st.textContent = P.p.mode === 'object'
     ? 'Drag an Object box from the toolbox, name it name:Class, then join objects with Object link.'
@@ -1338,6 +1467,7 @@ function renderInspector() {
   const P = curPart();
   if (!S.sel || S.view === 'model') { box.innerHTML = helpHTML(P.p.mode); return; }
   if (isSeq()) { renderSeqInspector(box); return; }
+  if (isAct()) { renderActInspector(box); return; }
   if (S.sel.kind === 'node') {
     const n = nodeById(S.sel.id);
     if (!n) { S.sel = null; box.innerHTML = helpHTML(P.p.mode); return; }
@@ -1405,16 +1535,72 @@ function renderInspector() {
   $('#f-del').onclick = deleteSel;
 }
 
+function renderActInspector(box) {
+  const d = curDiagram();
+  const P = curPart();
+  if (S.sel.kind === 'node') {
+    const n = nodeById(S.sel.id);
+    if (!n) { S.sel = null; box.innerHTML = helpHTML(P.p.mode); return; }
+    const title = { start: 'Start node', end: 'End node', action: 'Action', decision: 'Branch / merge node', bar: 'Fork / join bar' }[n.kind] || 'Node';
+    const about = {
+      start: 'Where the activity begins. Draw one, with one flow out.',
+      end: 'Where a path finishes. A diagram can have more than one.',
+      decision: 'Several flows out, each with a guard, is a branch: one path is taken. Several flows in and one out is a merge.',
+      bar: 'One flow in and several out is a fork: the steps run at the same time. Several in and one out is a join: it waits for all of them.',
+    }[n.kind];
+    box.innerHTML = `
+      <h3>${title}</h3>
+      ${n.kind === 'action' ? `<label class="field"><span>What happens</span><input id="f-name" value="${esc(n.name)}" autocomplete="off"></label>` : ''}
+      ${n.kind === 'decision' ? `<label class="field"><span>Text in the diamond (optional)</span><input id="f-name" value="${esc(n.name || '')}" placeholder="usually left empty" autocomplete="off"></label>` : ''}
+      ${n.kind === 'bar' ? `<label class="field"><span>Width</span><input id="f-w" type="number" min="40" step="10" value="${esc(n.w || 220)}"></label>` : ''}
+      ${about ? `<p class="muted">${esc(about)}</p>` : ''}
+      ${n.kind === 'action' || n.kind === 'decision' ? cheatHTML('activity') : ''}
+      <div class="actions"><button class="btn danger" id="f-del" type="button">Delete</button></div>`;
+    const fn = $('#f-name');
+    if (fn) fn.oninput = (ev) => { n.name = ev.target.value; renderCanvas(); save(); };
+    const fw = $('#f-w');
+    if (fw) fw.oninput = (ev) => { const v = parseInt(ev.target.value, 10); if (v >= 40) { n.w = v; renderCanvas(); save(); } };
+    $('#f-del').onclick = deleteSel;
+    return;
+  }
+  const e = d.edges.find((x) => x.id === S.sel.id);
+  if (!e) { S.sel = null; box.innerHTML = helpHTML(P.p.mode); return; }
+  const nm = (id) => { const n = nodeById(id); return !n ? '?' : n.kind === 'action' ? n.name || 'action' : { start: 'start', end: 'end', decision: 'diamond', bar: 'bar' }[n.kind] || n.kind; };
+  const fromBranch = nodeById(e.from)?.kind === 'decision';
+  box.innerHTML = `
+    <h3>Flow</h3>
+    <p style="margin:0 0 10px"><code>${esc(nm(e.from))}</code> → <code>${esc(nm(e.to))}</code></p>
+    <div class="actions" style="margin:0 0 14px"><button class="btn small" id="f-swap" type="button">Swap ends</button></div>
+    <label class="field"><span>Guard ${fromBranch ? '' : '(only on flows out of a branch node)'}</span><input id="f-guard" class="mono" value="${esc(e.guard || '')}" placeholder="more parcels" autocomplete="off"></label>
+    <p class="muted" style="margin-top:-4px">Drawn in square brackets: [more parcels].</p>
+    <label class="field"><span>Path</span><select id="f-route"><option value="">Straight</option><option value="right">Around the right (loops back up)</option><option value="left">Around the left</option></select></label>
+    <div class="actions"><button class="btn danger" id="f-del" type="button">Delete flow</button></div>`;
+  $('#f-route').value = e.route || '';
+  $('#f-guard').oninput = (ev) => { e.guard = ev.target.value; renderCanvas(); save(); };
+  $('#f-route').onchange = (ev) => { if (ev.target.value) e.route = ev.target.value; else delete e.route; renderCanvas(); save(); };
+  $('#f-swap').onclick = () => { [e.from, e.to] = [e.to, e.from]; renderCanvas(); renderInspector(); save(); };
+  $('#f-del').onclick = deleteSel;
+}
+
 function cheatHTML(kind) {
   const rows = {
     class: [['-name: String', 'private attribute'], ['#title: String', 'protected'], ['+getCount(): int', 'method with return type'], ['+add(s: Item)', 'void return can be left out'], ['+print() {abstract}', 'abstract method'], ['-count: int {static}', 'static (shown underlined)']],
     enum: [['GOOD', 'one value per line'], ['OK', ''], ['POOR', '']],
     object: [['name = "spanner"', 'attribute with its value'], ['rating = POOR', 'enum value']],
+    activity: [['Scan parcel', 'action: a short verb phrase'], ['more parcels', 'guard on a flow out of a diamond'], ['else', 'guard for the remaining path']],
     sequence: [[':Logic', 'object lifeline'], ['p:Person', 'named object'], ['find(title)', 'call label'], ['b', 'return value (optional)'], ['Loan(b, m)', 'create label']],
   }[kind];
   return `<div class="cheat" aria-label="Syntax examples">${rows.map(([a, b]) => `<div><code>${esc(a)}</code><span>${esc(b)}</span></div>`).join('')}</div>`;
 }
 function helpHTML(mode) {
+  if (mode === 'activity') return `<div class="help">
+    <h3>How to draw</h3>
+    <p><strong>Nodes:</strong> click a tile or drag it onto the paper. Start, Action, Branch / merge (diamond), Fork / join (bar), End.</p>
+    <p><strong>Flows:</strong> pick Flow, then click where it starts and where it goes. Click a flow to give it a guard, or route it around the side for a loop back up.</p>
+    <p>Every flow out of a branch node needs a guard. Bring paths together in a merge node, or a join bar for parallel steps, before they enter an action.</p>
+    <p class="muted">Delete removes the selected item. Esc cancels the flow tool. Your work is kept in this browser.</p>
+    ${cheatHTML('activity')}
+  </div>`;
   if (mode === 'sequence') return `<div class="help">
     <h3>How to draw</h3>
     <p><strong>Lifelines:</strong> click Object lifeline for each object. Use Class lifeline for static methods. Drag a box sideways to reorder.</p>
@@ -1609,7 +1795,10 @@ $('#ioLoad').onclick = () => {
     return;
   }
   if (!d || !Array.isArray(d.nodes) || !Array.isArray(d.edges)) { $('#ioMsg').textContent = 'The JSON needs "nodes" and "edges" arrays.'; return; }
-  d.nodes.forEach((n) => { n.id = n.id || uid('n'); n.attrs = n.attrs || []; n.methods = n.methods || []; n.x = +n.x || 0; n.y = +n.y || 0; n.kind = n.kind === 'object' ? 'object' : 'class'; n.stereo = n.stereo || ''; });
+  if (isAct()) {
+    d.nodes.forEach((n) => { n.id = n.id || uid('n'); n.x = +n.x || 0; n.y = +n.y || 0; n.kind = UMLGrader.ACT_KINDS.includes(n.kind) ? n.kind : 'action'; n.name = n.name || ''; });
+    d.edges.forEach((e) => { e.id = e.id || uid('e'); e.type = 'flow'; e.guard = e.guard || ''; });
+  } else d.nodes.forEach((n) => { n.id = n.id || uid('n'); n.attrs = n.attrs || []; n.methods = n.methods || []; n.x = +n.x || 0; n.y = +n.y || 0; n.kind = n.kind === 'object' ? 'object' : 'class'; n.stereo = n.stereo || ''; });
   d.edges.forEach((e) => { e.id = e.id || uid('e'); });
   const P = curPart();
   S.diagrams[P.key] = d; S.view = 'mine'; S.sel = null; delete S.results[P.key];
@@ -1640,9 +1829,9 @@ function renderQuestion() {
   $('#qpane').innerHTML = `
     <h1>${esc(P.q.title)}</h1>
     <p class="source">${esc(P.q.source || '')}</p>
-    <div class="prompt"><b>Part (${esc(P.p.id)}) · ${P.p.mode === 'object' ? 'object diagram' : P.p.mode === 'sequence' ? 'sequence diagram' : 'class diagram'}</b>${esc(P.p.prompt)}</div>
-    <details class="codes" ${window.innerWidth > 760 ? 'open' : ''}><summary>Code · ${P.q.code.length} file${P.q.code.length === 1 ? '' : 's'}</summary>
-    ${P.q.code.map((c) => `<figure class="codefile"><figcaption>${esc(c.file)}</figcaption><pre><code>${highlight(c.text)}</code></pre></figure>`).join('')}</details>`;
+    <div class="prompt"><b>Part (${esc(P.p.id)}) · ${P.p.mode === 'object' ? 'object diagram' : P.p.mode === 'sequence' ? 'sequence diagram' : P.p.mode === 'activity' ? 'activity diagram' : 'class diagram'}</b>${esc(P.p.prompt)}</div>
+    <details class="codes" ${window.innerWidth > 760 ? 'open' : ''}><summary>${P.q.code.some((c) => /\.java$/i.test(c.file)) ? 'Code' : 'Description'} · ${P.q.code.length} file${P.q.code.length === 1 ? '' : 's'}</summary>
+    ${P.q.code.map((c) => `<figure class="codefile"><figcaption>${esc(c.file)}</figcaption>${/\.java$/i.test(c.file) ? `<pre><code>${highlight(c.text)}</code></pre>` : `<pre class="prose">${esc(c.text)}</pre>`}</figure>`).join('')}</details>`;
 }
 function renderTabs() {
   $('#qtabs').innerHTML = S.parts.map((P, i) => {
@@ -1768,7 +1957,7 @@ function importQuestions(list, origin) {
   const errs = [];
   for (const q of list) {
     if (!q || typeof q !== 'object' || typeof q.id !== 'string' || !/^[a-z0-9-]+$/.test(q.id) || !Array.isArray(q.parts) || !q.parts.length) { errs.push('a file is not a UML Drill question (needs an id and parts)'); continue; }
-    const bad = q.parts.find((p) => !['class', 'object', 'sequence'].includes(p.mode));
+    const bad = q.parts.find((p) => !UMLAuthor.MODES.includes(p.mode));
     if (bad) { errs.push(`${q.id}: part ${bad.id} has an unknown mode`); continue; }
     q.parts.forEach((p) => {
       p.model = p.model || UMLAuthor.emptyDiagram(p.mode);
@@ -1914,10 +2103,10 @@ function renderAuthor() {
   const otherParts = q.parts.length;
   const part = `
     <label class="field"><span>Prompt</span><textarea rows="3" ${bind('p', [], 'prompt', 'text')}>${esc(p.prompt)}</textarea></label>
-    <label class="field"><span>Diagram type</span><select id="aMode"><option value="class">Class diagram</option><option value="object">Object diagram</option><option value="sequence">Sequence diagram</option></select></label>
+    <label class="field"><span>Diagram type</span><select id="aMode"><option value="class">Class diagram</option><option value="object">Object diagram</option><option value="sequence">Sequence diagram</option><option value="activity">Activity diagram</option></select></label>
     <p class="a-hint" style="margin-top:-6px">Changing the type clears this part's starter, model answer, key and examples.</p>
     <div class="actions">
-      <select id="aNewMode" aria-label="Type of new part"><option value="class">Class</option><option value="object">Object</option><option value="sequence">Sequence</option></select>
+      <select id="aNewMode" aria-label="Type of new part"><option value="class">Class</option><option value="object">Object</option><option value="sequence">Sequence</option><option value="activity">Activity</option></select>
       <button class="btn small" data-act="addpart" type="button">Add part</button>
       ${otherParts > 1 ? `<button class="btn small" data-act="delpart" type="button">Delete part (${esc(p.id)})</button>` : ''}
     </div>`;
@@ -1938,7 +2127,9 @@ function renderAuthor() {
       <button class="btn small primary" data-act="genkey" type="button">Generate from model answer</button>
       <button class="btn small" data-act="jsonkey" type="button">${A.jsonOpen ? 'Use the form' : 'Edit as JSON'}</button>
     </div>
-    <p class="a-hint">The generator makes every box, member and line in the model required, except constructors and dependencies. Then mark what else is accepted.</p>
+    <p class="a-hint">${p.mode === 'activity'
+      ? 'The generator makes every action and every step between actions in the model required, with the model\'s guards. Then add other wordings for actions and guards, and mark alternative paths optional.'
+      : 'The generator makes every box, member and line in the model required, except constructors and dependencies. Then mark what else is accepted.'}</p>
     ${A.jsonOpen ? `
       <textarea id="aKeyJson" class="a-code" rows="18" spellcheck="false" aria-label="Key JSON">${esc(JSON.stringify(p.key, null, 2))}</textarea>
       <div class="actions" style="margin-top:6px"><button class="btn small primary" data-act="applyjson" type="button">Apply JSON</button></div>
@@ -2019,6 +2210,7 @@ function sigText(s, ctor) {
 function keyForm(p) {
   if (p.mode === 'object') return objectKeyForm(p.key);
   if (p.mode === 'sequence') return seqKeyForm(p.key);
+  if (p.mode === 'activity') return actKeyForm(p.key);
   return classKeyForm(p.key);
 }
 function classKeyForm(k) {
@@ -2125,6 +2317,26 @@ function seqKeyForm(k) {
     <p class="a-hint">Method names, nesting and frames come from the model answer. To change them, edit the model and generate again, or edit as JSON.</p>`;
 }
 
+function actKeyForm(k) {
+  const acts = (k.actions || []).map((a, i) => `
+    <div class="a-mem">
+      <code>${esc(a.ref)}</code>
+      <label class="a-inline"><span>Shown as</span><input ${bind('k', ['actions', i], 'label', 'text', 'data-opt')} value="${esc(a.label || '')}"></label>
+      <label class="a-inline"><span>Accepted words (comma)</span><input class="mono" ${bind('k', ['actions', i], 'name', 'list')} value="${listVal(a.name)}"></label>
+    </div>`).join('');
+  const lbl = (r) => { const a = (k.actions || []).find((x) => x.ref === r); return r === 'start' || r === 'end' ? r : a ? a.label || a.ref : r; };
+  const side = (v) => [].concat(v).map(lbl).join(' + ');
+  const flows = (k.flows || []).map((f, i) => `
+    <div class="a-mem">
+      <code>${esc(side(f.from))} → ${esc(side(f.to))}</code>${f.via ? ` <span class="muted">${esc(f.via)}</span>` : ''}
+      <label class="a-inline"><span>Accepted guards (comma)</span><input class="mono" ${bind('k', ['flows', i], 'guard', 'list', 'data-opt')} value="${listVal(f.guard)}" placeholder="none"></label>
+      <label class="check"><input type="checkbox" ${bind('k', ['flows', i], 'optional', 'bool')} ${f.optional ? 'checked' : ''}> Optional</label>
+    </div>`).join('');
+  return `<div class="fieldlabel">Actions</div>${acts || '<p class="muted">None. Save a model answer, then generate the key.</p>'}
+    <div class="fieldlabel" style="margin-top:10px">Flows (one mark each)</div>${flows || '<p class="muted">None.</p>'}
+    <p class="a-hint">A student's action matches when it contains all the words of one accepted phrase (word order, "the", plurals and -ed/-ing are ignored). Guards match the same way. Add mistakes, merges and forks by editing as JSON.</p>`;
+}
+
 // ---- actions ----
 $('#author').addEventListener('toggle', (e) => {
   const d = e.target.closest && e.target.closest('details[data-sec]');
@@ -2146,7 +2358,7 @@ $('#author').addEventListener('change', (e) => {
     const mode = t.value;
     const fresh = UMLAuthor.blankPart(P.p.id, mode);
     Object.assign(P.p, { mode, starter: fresh.starter, model: fresh.model, key: fresh.key, examples: [] });
-    const oldDefault = UMLAuthor.blankPart('x', Object.keys({ class: 1, object: 1, sequence: 1 }).find((m) => UMLAuthor.blankPart('x', m).prompt === P.p.prompt) || 'none');
+    const oldDefault = UMLAuthor.blankPart('x', UMLAuthor.MODES.find((m) => UMLAuthor.blankPart('x', m).prompt === P.p.prompt) || 'none');
     if (!P.p.prompt.trim() || (oldDefault && oldDefault.prompt === P.p.prompt)) P.p.prompt = fresh.prompt;
     S.diagrams[P.key] = emptyFor(P.p); store.set(P.key, S.diagrams[P.key]); delete S.results[P.key];
     commitQ(P.q); S.sel = null; S.tool = null; S.pending = null;
@@ -2316,6 +2528,7 @@ $('#author').addEventListener('click', async (e) => {
 function isEmptyKey(p) {
   const k = p.key || {};
   if (p.mode === 'sequence') return !(k.lifelines || []).length;
+  if (p.mode === 'activity') return !(k.actions || []).length;
   if (p.mode === 'object') return !(k.objects || []).length;
   return !Object.keys(k.classes || {}).length;
 }

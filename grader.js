@@ -187,6 +187,10 @@
     if (part.mode === 'object') {
       return (k.objects || []).reduce((s, o) => s + 1 + (o.attrs || []).length, 0) + (k.links || []).length;
     }
+    if (part.mode === 'activity') {
+      // each action, the start node, an end node, and each flow the key requires
+      return (k.actions || []).length + 2 + (k.flows || []).filter((f) => !f.optional).length;
+    }
     const cls = Object.values(k.classes || {}).reduce((s, c) => s + 1 + (c.attrs || []).length + (c.methods || []).length + (c.values ? 1 : 0), 0);
     const rels = (k.relations || []).filter((r) => !r.optional).reduce((s, r) => s + (r.orTwoLines ? 2 : 1), 0);
     return cls + rels;
@@ -1027,11 +1031,362 @@
     return lines.join('\n');
   }
 
+  // ---------- activity diagrams ----------
+  //
+  // Stored diagram: { nodes: [{ id, kind: 'start'|'end'|'action'|'decision'|'bar', name, x, y, w? }],
+  //                   edges: [{ id, type: 'flow', from, to, guard, route? }] }
+  // Key: { actions: [{ ref, label?, name: [phrases] }],
+  //        flows: [{ from, to, guard?, via?: 'fork'|'join', optional?, mistakes? }],
+  //        allowExtra?: [phrases] }
+  //   from / to: an action ref, "start" or "end", or a list of them. A list in "from" is several
+  //   paths meeting at one target (one mark); a list in "to" with via "fork" is one fork (one mark).
+  //
+  // The student's graph is reduced to steps between anchors (start, end and the matched actions):
+  // a step A -> B is any path from A to B through branch/merge diamonds, bars and extra actions,
+  // with the guards and bars it passed. Steps are compared with the key's flows, so a separate
+  // merge diamond, a merge+branch diamond, or one 3-way diamond instead of two nested ones all
+  // grade the same. Layout rules (guards on every branch, one flow into an action) are checked
+  // on the raw graph.
+
+  const ACT_KINDS = ['start', 'end', 'action', 'decision', 'bar'];
+  const isActivity = (d) => !!(d && Array.isArray(d.nodes) && d.nodes.some((n) => ACT_KINDS.includes(n.kind)));
+  const STOP = new Set(['a', 'an', 'the', 'to', 'of', 'is', 'are', 'be', 'for', 'on', 'in', 'at', 'it', 'its', 'this', 'that', 'with', 'by', 'from', 'into', 'and', 'or', 'has', 'have', 'was', 'there', 'their', 'his', 'her', 'any', 'up']);
+  const NEG = new Set(['not', 'no', 'none', 'never', 'cannot', 'cant', 'isnt', 'arent', 'doesnt', 'dont', 'didnt', 'wasnt', 'without']);
+  const SYN = { otherwise: 'else' };
+
+  function stem(w) {
+    let s = SYN[w] || w;
+    if (s.length > 4 && s.endsWith('ies')) s = s.slice(0, -3) + 'y';
+    else if (s.length > 5 && s.endsWith('ing')) s = s.slice(0, -3);
+    else if (s.length > 4 && s.endsWith('ed')) s = s.slice(0, -2);
+    else if (s.length > 3 && /(s|x|z|ch|sh)es$/.test(s)) s = s.slice(0, -2);
+    else if (s.length > 3 && s.endsWith('s') && !s.endsWith('ss')) s = s.slice(0, -1);
+    if (s.length > 3 && /([b-df-hj-np-tv-z])\1$/.test(s)) s = s.slice(0, -1);
+    if (s.length > 3 && s.endsWith('e')) s = s.slice(0, -1);
+    return s;
+  }
+  /** Words of a phrase, stemmed, without filler words; "neg" if it says not/no. */
+  function words(str) {
+    const t = String(str == null ? '' : str).replace(/([a-z])([A-Z])/g, '$1 $2').toLowerCase()
+      .replace(/[’']/g, '').replace(/!=|≠/g, ' not ').replace(/!/g, ' not ')
+      .replace(/>=|≥/g, ' ge ').replace(/<=|≤/g, ' le ').replace(/</g, ' lt ').replace(/>/g, ' gt ');
+    const raw = t.split(/[^a-z0-9]+/).filter(Boolean);
+    return { set: new Set(raw.filter((w) => !STOP.has(w) && !NEG.has(w)).map(stem)), neg: raw.some((w) => NEG.has(w)) };
+  }
+  /** 0 if text does not say phrase; otherwise how closely (1 = same words). */
+  function phraseMatch(phrase, text) {
+    const p = words(phrase), t = words(text);
+    if (p.neg !== t.neg) return 0;
+    if (!p.set.size) return t.set.size ? 0 : 1;
+    for (const w of p.set) if (!t.set.has(w)) return 0;
+    return p.set.size / Math.max(t.set.size, 1);
+  }
+  const saysAny = (phrases, text) => (listOf(phrases) || []).some((ph) => clean(ph) !== '' && phraseMatch(ph, text) > 0);
+
+  function actGraph(diagram) {
+    const nodes = (diagram.nodes || []).filter((n) => n && n.id);
+    const byId = {};
+    nodes.forEach((n) => { byId[n.id] = n; });
+    const edges = (diagram.edges || []).filter((e) => e && byId[e.from] && byId[e.to]);
+    const outs = {}, ins = {};
+    nodes.forEach((n) => { outs[n.id] = []; ins[n.id] = []; });
+    edges.forEach((e) => { outs[e.from].push(e); ins[e.to].push(e); });
+    return { nodes, byId, edges, outs, ins };
+  }
+
+  /** Guard text of a flow. [yes]/[no] out of a labelled diamond are read as its question. */
+  function effGuard(g, e) {
+    const raw = clean(e.guard).replace(/^\[\s*(.*?)\s*\]$/, '$1');
+    const src = g.byId[e.from];
+    if (src.kind === 'decision' && clean(src.name)) {
+      const q = clean(src.name).replace(/\?\s*$/, '');
+      if (/^(yes|y|true|t)$/i.test(raw)) return { text: q, raw, fromLabel: true };
+      if (/^(no|n|false|f)$/i.test(raw)) return { text: 'not ' + q, raw, fromLabel: true };
+    }
+    return { text: raw, raw };
+  }
+
+  /** Steps between anchor nodes: { nodeId: [{ to, guards, forks, joins, implicitForks, implicitJoins, branches, edges }] }. */
+  function actSteps(g, isAnchor) {
+    const T = {};
+    for (const a of g.nodes) {
+      if (!isAnchor(a)) continue;
+      const list = (T[a.id] = []);
+      const walk = (nid, st, seen) => {
+        const here = g.byId[nid];
+        const many = g.outs[nid].length > 1;
+        for (const e of g.outs[nid]) {
+          const n = g.byId[e.to];
+          const gd = effGuard(g, e);
+          const s = Object.assign({}, st, { guards: gd.text ? st.guards.concat(gd.text) : st.guards, edges: st.edges.concat(e.id) });
+          if (many && here.kind === 'decision') { s.branches++; if (!gd.text) s.unguarded++; }
+          if (many && isAnchor(here)) { if (gd.text) s.branches++; else s.implicitForks++; }
+          if (isAnchor(n)) {
+            if (g.ins[n.id].length > 1) s.implicitJoins++;
+            list.push(Object.assign({ to: n.id }, s));
+            continue;
+          }
+          if (seen.has(n.id)) continue;
+          if (n.kind === 'bar') { if (g.outs[n.id].length > 1) s.forks++; if (g.ins[n.id].length > 1) s.joins++; }
+          if (n.kind === 'decision' && g.ins[n.id].length > 1) s.merges++;
+          walk(n.id, s, new Set(seen).add(n.id));
+        }
+      };
+      walk(a.id, { guards: [], forks: 0, joins: 0, implicitForks: 0, implicitJoins: 0, branches: 0, merges: 0, unguarded: 0, edges: [] }, new Set([a.id]));
+    }
+    return T;
+  }
+
+  function gradeActivityDiagram(key, diagram) {
+    const r = makeReporter();
+    const g = actGraph(diagram);
+    const { nodes, byId, outs, ins } = g;
+    const actions = key.actions || [];
+    const flows = key.flows || [];
+    const keyAct = {};
+    actions.forEach((a) => { keyAct[a.ref] = a; });
+    const quote = (t) => (t.includes('"') ? t : `"${t}"`);
+    const refLabel = (ref) => (ref === 'start' ? 'the start node' : ref === 'end' ? 'an end node'
+      : quote(keyAct[ref] ? keyAct[ref].label || listOf(keyAct[ref].name)[0].replace(/^./, (c) => c.toUpperCase()) : ref));
+    const nodeLabel = (n) => (n.kind === 'start' ? 'the start node' : n.kind === 'end' ? 'the end node'
+      : n.kind === 'decision' ? 'this diamond' : n.kind === 'bar' ? 'this bar' : `"${clean(n.name)}"`);
+    const whereOf = (n) => (n.kind === 'action' ? clean(n.name) || 'Action' : n.kind === 'decision' ? (clean(n.name) ? `◇ ${clean(n.name)}` : 'Branch/merge')
+      : n.kind === 'bar' ? 'Fork/join bar' : n.kind === 'start' ? 'Start' : 'End');
+    const names = (list) => { const l = list.map(refLabel); return l.length < 2 ? l.join('') : l.slice(0, -1).join(', ') + ' and ' + l[l.length - 1]; };
+
+    // ---- elements that do not belong ----
+    nodes.filter((n) => !ACT_KINDS.includes(n.kind)).forEach((n) => r.error(clean(n.name) || 'Box', `"${clean(n.name)}" is a ${n.kind || 'class'} box. Activity diagrams are made of actions, diamonds, bars and start/end nodes.`, { node: n.id }));
+
+    // ---- match actions by their words ----
+    const acts = nodes.filter((n) => n.kind === 'action');
+    acts.filter((n) => !clean(n.name)).forEach((n) => r.error('Action', 'An action has no name. Write the step in it, e.g. "Scan parcel".', { node: n.id }));
+    const named = acts.filter((n) => clean(n.name));
+    const nodeRef = {}, refNode = {};
+    const cand = [];
+    actions.forEach((a) => named.forEach((n) => {
+      const s = Math.max(0, ...listOf(a.name).map((ph) => phraseMatch(ph, n.name)));
+      if (s > 0) cand.push({ a, n, s });
+    }));
+    cand.sort((x, y) => y.s - x.s);
+    for (const c of cand) if (!refNode[c.a.ref] && !nodeRef[c.n.id]) { refNode[c.a.ref] = c.n.id; nodeRef[c.n.id] = c.a.ref; }
+    const starts = nodes.filter((n) => n.kind === 'start'), ends = nodes.filter((n) => n.kind === 'end');
+    starts.forEach((n) => { nodeRef[n.id] = 'start'; });
+    ends.forEach((n) => { nodeRef[n.id] = 'end'; });
+    if (starts.length) refNode.start = starts[0].id;
+    if (ends.length) refNode.end = ends[0].id;
+
+    // an action in the place of a missing one, worded differently: half credit
+    const missing0 = actions.filter((a) => !refNode[a.ref]);
+    const free = named.filter((n) => !nodeRef[n.id] && !saysAny(key.allowExtra, n.name));
+    if (missing0.length && free.length) {
+      const T0 = actSteps(g, (n) => n.kind === 'start' || n.kind === 'end' || (n.kind === 'action' && clean(n.name)));
+      const predsOf = (id) => Object.keys(T0).filter((a) => T0[a].some((t) => t.to === id));
+      for (const a of missing0) {
+        const kp = new Set(), ks = new Set();
+        flows.forEach((f) => {
+          if (listOf(f.to).includes(a.ref)) listOf(f.from).forEach((x) => kp.add(x));
+          if (listOf(f.from).includes(a.ref)) listOf(f.to).forEach((x) => ks.add(x));
+        });
+        let best = null, bestS = 0, tie = false;
+        for (const n of free) {
+          if (nodeRef[n.id]) continue;
+          const s = predsOf(n.id).filter((p) => kp.has(nodeRef[p])).length + (T0[n.id] || []).filter((t) => ks.has(nodeRef[t.to])).length;
+          if (s > bestS) { best = n; bestS = s; tie = false; } else if (s === bestS && s > 0) tie = true;
+        }
+        if (best && !tie) {
+          refNode[a.ref] = best.id; nodeRef[best.id] = a.ref;
+          r.partial(clean(best.name), `"${clean(best.name)}" is where ${refLabel(a.ref)} should be, but it does not say that step (the key looks for words like "${listOf(a.name)[0]}"). If it means the same thing, this is only wording.`, { node: best.id }, 0.5);
+        }
+      }
+    }
+    named.filter((n) => !nodeRef[n.id]).forEach((n) => {
+      if (saysAny(key.allowExtra, n.name)) return;
+      r.error(clean(n.name), `"${clean(n.name)}" is not a step in the description. Remove it, or reword it if it is one of the steps.`, { node: n.id });
+    });
+
+    // ---- layout rules on the raw graph ----
+    const noGuard = {}; // diamond id -> its missing-guard issue
+    if (!starts.length) r.error('Start', 'No start node. Begin the activity with a filled circle.');
+    if (starts.length > 1) r.error('Start', `There are ${starts.length} start nodes. An activity has one.`, { node: starts[1].id });
+    if (!ends.length) r.error('End', 'No end node. Finish the activity with an end node (a dot inside a ring).');
+    for (const n of nodes) {
+      const ref = { node: n.id };
+      const o = outs[n.id].length, i = ins[n.id].length;
+      if (n.kind === 'start' && i) r.error('Start', 'A flow goes into the start node. The start node only has a flow out.', ref);
+      if (n.kind === 'end' && o) r.error('End', 'A flow leaves an end node. Nothing follows an end node.', ref);
+      if ((n.kind === 'action' || n.kind === 'start') && o > 1) {
+        r.partial(whereOf(n), `${o} flows leave ${nodeLabel(n)}. Draw one flow out, into a branch node (diamond) with guards for a choice, or into a fork bar for steps that run at the same time.`, ref, 0.5);
+      }
+      if (n.kind === 'action' && i > 1) {
+        r.partial(whereOf(n), `${i} flows enter ${nodeLabel(n)} directly. Bring them together first in a merge node (diamond), or in a join bar if they run at the same time.`, ref, 0.5);
+      }
+      if (n.kind === 'decision') {
+        if (o > 1) {
+          const gs = outs[n.id].map((e) => effGuard(g, e));
+          if (gs.some((x) => !x.text)) { r.error(whereOf(n), 'Every flow leaving a branch node needs a guard in [ ], for example [more parcels] and [no more parcels].', ref); noGuard[n.id] = r.issues[r.issues.length - 1]; }
+          const txt = gs.map((x) => x.text).filter(Boolean);
+          const dup = txt.find((x, k) => txt.some((y, j) => j !== k && phraseMatch(x, y) === 1 && phraseMatch(y, x) === 1));
+          if (dup) r.error(whereOf(n), `Two flows leaving this branch node have the same guard [${dup}]. Only one path can be taken, so the guards must differ.`, ref);
+          if (gs.some((x) => x.fromLabel)) r.note(whereOf(n), `Guards [yes]/[no] are read using the diamond's text. Course style leaves the diamond empty and writes the condition on each flow, e.g. [${clean(n.name).replace(/\?\s*$/, '')}].`, ref);
+        } else if (i <= 1) r.note(whereOf(n), 'This diamond neither branches nor merges. Remove it.', ref);
+      }
+      if (n.kind === 'bar' && o <= 1 && i <= 1) r.note(whereOf(n), 'This bar neither forks nor joins. Remove it.', ref);
+    }
+    for (const e of g.edges) {
+      const src = byId[e.from];
+      if (clean(e.guard) && src.kind !== 'decision' && outs[src.id].length <= 1) {
+        r.note(whereOf(src), `The guard [${clean(e.guard).replace(/^\[|\]$/g, '')}] is on a flow that does not leave a branch node. Guards belong on the flows out of a diamond.`, { edge: e.id });
+      }
+    }
+
+    // ---- compare steps with the key's flows ----
+    const present = (ref) => !!refNode[ref];
+    actions.filter((a) => !present(a.ref)).forEach((a) => r.error(refLabel(a.ref).replace(/"/g, ''), `Missing the action ${refLabel(a.ref)}.`));
+    const T = actSteps(g, (n) => !!nodeRef[n.id]);
+    const stepsOf = (a, b) => {
+      const out = [];
+      for (const [id, list] of Object.entries(T)) if (nodeRef[id] === a) list.forEach((t) => { if (nodeRef[t.to] === b) out.push(Object.assign({ fromNode: id }, t)); });
+      return out;
+    };
+    const closure = (ref, side) => {
+      const out = new Set(), seen = new Set([ref]);
+      const go = (x) => flows.forEach((f) => {
+        const [here, there] = side === 'succ' ? [listOf(f.from), listOf(f.to)] : [listOf(f.to), listOf(f.from)];
+        if (!here.includes(x)) return;
+        there.forEach((y) => { if (present(y)) out.add(y); else if (!seen.has(y)) { seen.add(y); go(y); } });
+      });
+      go(ref);
+      return [...out];
+    };
+    const covered = new Set();
+    const failedFrom = new Set(), failedTo = new Set();
+    const nodeRefOf = (ref) => (refNode[ref] ? { node: refNode[ref] } : null);
+    const guardOk = (f, t) => !f.guard || listOf(f.guard).includes('') || t.guards.some((x) => saysAny(f.guard, x));
+
+    function problemOf(f, t, a) {
+      const forkOK = t.forks + t.implicitForks > 0, joinOK = t.joins + t.implicitJoins > 0;
+      if (f.via === 'fork' && !forkOK) return { kind: t.branches ? 'decision' : 'sequence', rank: 2, t };
+      if (f.via === 'join' && !joinOK) return { kind: t.merges || t.branches ? 'merge' : 'sequence', rank: 2, t };
+      if (!f.via && (t.forks || t.joins)) return { kind: 'fork', rank: 2, t };
+      if (!guardOk(f, t)) {
+        if (t.unguarded) return null; // reported once for the diamond
+        if (t.guards.length) {
+          const other = flows.find((o) => o !== f && o.guard && listOf(o.from).includes(a) && t.guards.some((x) => saysAny(o.guard, x)));
+          return { kind: other ? 'swapped' : 'guard', rank: other ? 2 : 1, t, other };
+        }
+        if (forkOK && !t.branches) return { kind: 'fork', rank: 2, t };
+      }
+      return null;
+    }
+    function viaHint(f) {
+      return f.via === 'fork' ? ' These steps happen at the same time: draw a fork bar with a flow to each.'
+        : f.via === 'join' ? ' Both must finish before the next step: bring them into a join bar.' : '';
+    }
+    const swapped = new Set();
+    const guardText = (f) => (f.guard ? ` when [${listOf(f.guard).find((x) => clean(x)) || ''}]` : '');
+
+    flows.forEach((f) => {
+      const F = listOf(f.from), To = listOf(f.to);
+      F.forEach((a) => To.forEach((b) => covered.add(a + '|' + b)));
+      const pf = F.filter(present), pt = To.filter(present);
+      const at = pf[0] || pt[0];
+      const where = at ? refLabel(at).replace(/"/g, '') : 'Flow';
+
+      if (!pf.length || !pt.length) {
+        // an end is missing: accept the path that skips it, so one missing step costs one mark
+        const froms = pf.length ? pf : [...new Set(F.flatMap((x) => closure(x, 'pred')))];
+        const tos = pt.length ? pt : [...new Set(To.flatMap((x) => closure(x, 'succ')))];
+        const pairs = froms.flatMap((a) => tos.map((b) => [a, b]));
+        pairs.forEach(([a, b]) => covered.add(a + '|' + b));
+        if (f.optional || (pairs.length && pairs.every(([a, b]) => stepsOf(a, b).length))) return;
+        pf.forEach((a) => failedFrom.add(a)); pt.forEach((b) => failedTo.add(b));
+        r.error(where, `Missing the flow from ${names(F)} to ${names(To)}${guardText(f)}.`, at ? nodeRefOf(at) : null);
+        return;
+      }
+
+      const gaps = [], probs = [];
+      for (const a of pf) for (const b of pt) {
+        const ts = stepsOf(a, b);
+        if (!ts.length) { gaps.push([a, b]); continue; }
+        let best = null;
+        for (const t of ts) { const p = problemOf(f, t, a); if (!p) { best = null; break; } if (!best || p.rank < best.rank) best = p; }
+        if (best) probs.push(best);
+      }
+      if (f.optional && gaps.length) return;
+      if (gaps.length) {
+        pf.forEach((a) => failedFrom.add(a)); pt.forEach((b) => failedTo.add(b));
+        const ga = [...new Set(gaps.map((x) => x[0]))], gb = [...new Set(gaps.map((x) => x[1]))];
+        // a known mistake: the path goes somewhere the key names
+        for (const [a] of gaps) {
+          const went = Object.entries(T).filter(([id]) => nodeRef[id] === a).flatMap(([, l]) => l.map((t) => nodeRef[t.to]));
+          const mk = (f.mistakes || []).find((m) => m.to !== undefined && listOf(m.to).some((x) => went.includes(x)));
+          if (mk) { reportMistake(r, where, mk, nodeRefOf(a)); return; }
+        }
+        // drawn one after the other instead of in parallel
+        const chained = (f.via === 'fork' && To.some((x) => To.some((y) => x !== y && stepsOf(x, y).length)))
+          || (f.via === 'join' && F.some((x) => F.some((y) => x !== y && stepsOf(x, y).length)));
+        if (chained) {
+          const mk = findMistake(f.mistakes, 'via', 'sequence');
+          if (mk) { reportMistake(r, where, mk, nodeRefOf(at)); return; }
+          r.error(where, `${names(f.via === 'fork' ? To : F)} are drawn one after the other, but they happen at the same time. Put them between a fork bar and a join bar.`, nodeRefOf(at));
+          return;
+        }
+        r.error(where, `Missing the flow from ${names(ga)} to ${names(gb)}${guardText(f)}.${viaHint(f)}`, nodeRefOf(ga[0]));
+        return;
+      }
+      if (!probs.length) return;
+      const p = probs.sort((x, y) => y.rank - x.rank)[0];
+      const ref = { edge: p.t.edges[p.t.edges.length - 1] };
+      if (p.kind === 'decision') {
+        // the diamond's missing guards are part of the same mistake
+        p.t.edges.forEach((id) => { const d = noGuard[g.edges.find((e) => e.id === id).from]; if (d && r.issues.includes(d)) r.issues.splice(r.issues.indexOf(d), 1); });
+      }
+      const mk = p.kind === 'guard' || p.kind === 'swapped'
+        ? (f.mistakes || []).find((m) => m.guard !== undefined && p.t.guards.some((x) => saysAny(m.guard, x)))
+        : findMistake(f.mistakes, 'via', p.kind);
+      if (mk) { reportMistake(r, where, mk, ref); return; }
+      if (p.kind === 'swapped') { if (swapped.has(f)) return; swapped.add(p.other); }
+      const A = names(F), B = names(To), shown = p.t.guards.map((x) => `[${x}]`).join(' then ');
+      if (p.kind === 'decision') r.error(where, `After ${A}, ${B} all happen, at the same time. Use a fork bar, not a branch node: a branch takes only one path.`, ref);
+      else if (p.kind === 'sequence') r.error(where, `${A} to ${B}: ${f.via === 'fork' ? 'these steps start together, so draw a fork bar.' : 'both must finish first, so draw a join bar.'}`, ref);
+      else if (p.kind === 'merge') r.error(where, `${A} run at the same time, so ${B} must wait for all of them: use a join bar, not a merge node.`, ref);
+      else if (p.kind === 'fork') r.error(where, `The path from ${A} to ${B} goes through a fork or join bar, but nothing runs in parallel here.${f.guard ? ' Only one path is taken: use a branch node with guards.' : ''}`, ref);
+      else if (p.kind === 'swapped') r.error(where, `${shown} leads to ${names(listOf(p.other.to))} in the description, not to ${B}. The guards are swapped.`, ref);
+      else r.partial(where, `The path from ${A} to ${B} is guarded ${shown}, but the condition here is [${listOf(f.guard).find((x) => clean(x))}]. If yours means the same thing, this is only wording.`, ref, 0.5);
+    });
+
+    // ---- steps the key does not have ----
+    const said = new Set();
+    for (const [id, list] of Object.entries(T)) {
+      const a = nodeRef[id];
+      for (const t of list) {
+        const b = nodeRef[t.to];
+        const k = a + '|' + b;
+        if (covered.has(k) || failedFrom.has(a) || failedTo.has(b) || said.has(k)) continue;
+        said.add(k);
+        r.error(a === 'start' ? 'Start' : refLabel(a).replace(/"/g, ''), `Unexpected flow from ${refLabel(a)} to ${refLabel(b)}. The description does not go from one to the other.`, { edge: t.edges[0] });
+      }
+    }
+    return r.issues;
+  }
+
+  function actToText(d) {
+    const nm = {};
+    let k = 0;
+    (d.nodes || []).forEach((n) => {
+      nm[n.id] = n.kind === 'action' ? `"${clean(n.name)}"` : n.kind === 'decision' ? `diamond${++k}${clean(n.name) ? ' "' + clean(n.name) + '"' : ''}` : n.kind === 'bar' ? `bar${++k}` : n.kind;
+    });
+    const lines = ['nodes: ' + (d.nodes || []).map((n) => nm[n.id]).join(', ')];
+    (d.edges || []).forEach((e) => lines.push(`${nm[e.from]} -> ${nm[e.to]}${clean(e.guard) ? ' [' + clean(e.guard).replace(/^\[|\]$/g, '') + ']' : ''}`));
+    return lines.join('\n');
+  }
+
   // ---------- entry ----------
 
   function grade(part, diagram) {
     let issues;
     if (part.mode === 'sequence') issues = gradeSequenceDiagram(part.key, diagram || { lifelines: [], rows: [] });
+    else if (part.mode === 'activity') issues = gradeActivityDiagram(part.key, diagram || { nodes: [], edges: [] });
     else {
       const d = diagram || { nodes: [], edges: [] };
       issues = part.mode === 'object' ? gradeObjectDiagram(part.key, d) : gradeClassDiagram(part.key, d);
@@ -1042,6 +1397,7 @@
   /** Plain-text dump of a diagram, for asking Claude or for debugging. */
   function toText(diagram) {
     if (diagram && diagram.rows) return seqToText(diagram);
+    if (isActivity(diagram)) return actToText(diagram);
     const nodes = (diagram.nodes || []).map(normNode);
     const nm = {};
     nodes.forEach((n) => { nm[n.id] = n.name || '(unnamed)'; });
@@ -1066,5 +1422,5 @@
     return lines.join('\n');
   }
 
-  return { grade, toText, maxMarks, parseMember, parseHeader, normNode, buildSeqTree, parseCall, parseLifeline, START };
+  return { grade, toText, maxMarks, parseMember, parseHeader, normNode, buildSeqTree, parseCall, parseLifeline, START, actGraph, actSteps, phraseMatch, ACT_KINDS };
 });

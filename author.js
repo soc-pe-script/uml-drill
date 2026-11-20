@@ -7,6 +7,7 @@
  *   validateQuestion(q, fileName?)  -> [{ where, msg }]
  *   checkQuestion(q, fileName?)     -> { problems: [{ where, msg, issues? }], passed: [{ where, msg }] }
  *   generateKey(mode, model)        -> key         (draft key that the model answer satisfies)
+ *   (modes: class, object, sequence, activity)
  *   blankQuestion(id), blankPart(id, mode)
  */
 (function (root, factory) {
@@ -26,6 +27,7 @@
   const ROW_TYPES = ['call', 'return', 'create', 'delete', 'frame', 'else', 'end'];
   const FRAMES = ['loop', 'alt', 'opt', 'par'];
   const isSeq = (d) => !!(d && d.rows);
+  const MODES = ['class', 'object', 'sequence', 'activity'];
 
   // ---------------- patches ----------------
 
@@ -150,7 +152,7 @@
 
   // ---------------- validation ----------------
 
-  function validateDiagram(where, d, out) {
+  function validateDiagram(where, d, out, mode) {
     const fail = (msg) => out.push({ where, msg });
     if (d && d.rows) {
       if (!Array.isArray(d.lifelines)) return fail('needs a "lifelines" array');
@@ -172,6 +174,21 @@
     }
     if (!d || !Array.isArray(d.nodes) || !Array.isArray(d.edges)) return fail('needs "nodes" and "edges" arrays');
     const ids = new Set();
+    if (mode === 'activity') {
+      for (const n of d.nodes) {
+        if (!n.id || ids.has(n.id)) fail(`node id "${n.id}" missing or duplicate`);
+        ids.add(n.id);
+        if (!G.ACT_KINDS.includes(n.kind)) fail(`node "${n.id}": kind must be one of ${G.ACT_KINDS.join(', ')}`);
+        if (typeof n.x !== 'number' || typeof n.y !== 'number') fail(`node "${n.id}": needs numeric x and y`);
+      }
+      for (const e of d.edges) {
+        if (!e.id || ids.has(e.id)) fail(`flow id "${e.id}" missing or duplicate`);
+        ids.add(e.id);
+        if (e.type !== 'flow') fail(`flow "${e.id}": type must be "flow"`);
+        if (!d.nodes.some((n) => n.id === e.from) || !d.nodes.some((n) => n.id === e.to)) fail(`flow "${e.id}": from/to must be node ids`);
+      }
+      return;
+    }
     for (const n of d.nodes) {
       if (!n.id) fail('a box has no id');
       if (ids.has(n.id)) fail(`duplicate id "${n.id}"`);
@@ -205,11 +222,11 @@
       if (partIds.has(p.id)) fail(pw, 'duplicate part id');
       partIds.add(p.id);
       for (const f of ['id', 'mode', 'prompt', 'key', 'model']) if (p[f] === undefined) fail(pw, `missing "${f}"`);
-      if (!['class', 'object', 'sequence'].includes(p.mode)) fail(pw, 'mode must be "class", "object" or "sequence"');
-      if (p.model) validateDiagram(`${pw} model`, p.model, out);
-      if (p.starter) validateDiagram(`${pw} starter`, p.starter, out);
+      if (!MODES.includes(p.mode)) fail(pw, `mode must be one of ${MODES.join(', ')}`);
+      if (p.model) validateDiagram(`${pw} model`, p.model, out, p.mode);
+      if (p.starter) validateDiagram(`${pw} starter`, p.starter, out, p.mode);
       const k = p.key || {};
-      const MISTAKE_FIELDS = ['type', 'toMult', 'fromMult', 'toRole', 'fromRole', 'frame', 'to', 'method'];
+      const MISTAKE_FIELDS = ['type', 'toMult', 'fromMult', 'toRole', 'fromRole', 'frame', 'to', 'method', 'guard', 'via'];
       const checkMistakes = (owner, list) => (list || []).forEach((m, i) => {
         const w = `${owner} mistake ${i + 1}`;
         if (!m || typeof m.msg !== 'string' || !m.msg.trim()) fail(pw, `${w}: needs a "msg"`);
@@ -239,6 +256,25 @@
           (e.branches || []).forEach((b) => walk(b.body));
         });
         walk(k.body);
+      }
+      if (p.mode === 'activity') {
+        const refs = new Set(['start', 'end']);
+        for (const a of k.actions || []) {
+          if (!a.ref || refs.has(a.ref)) fail(pw, `action ref "${a.ref}" missing, duplicate or reserved (start, end)`);
+          refs.add(a.ref);
+          if (!(Array.isArray(a.name) ? a.name : [a.name]).some((x) => clean(x))) fail(pw, `action "${a.ref}": needs at least one name phrase`);
+        }
+        const VIA_MISTAKES = ['sequence', 'decision', 'merge', 'fork'];
+        (k.flows || []).forEach((f, i) => {
+          const fw = `flow ${i + 1}`;
+          for (const x of [].concat(f.from, f.to)) if (!refs.has(x)) fail(pw, `${fw}: unknown ref "${x}"`);
+          if (f.via !== undefined && !['fork', 'join'].includes(f.via)) fail(pw, `${fw}: via must be "fork" or "join"`);
+          checkMistakes(fw, f.mistakes);
+          for (const m of f.mistakes || []) {
+            if (m.via !== undefined && !VIA_MISTAKES.includes(m.via)) fail(pw, `${fw}: a mistake's via must be one of ${VIA_MISTAKES.join(', ')}`);
+            if (m.to !== undefined && [].concat(m.to).some((x) => !refs.has(x))) fail(pw, `${fw}: a mistake's "to" must name known refs`);
+          }
+        });
       }
       if (p.mode === 'object') {
         const refs = new Set((k.objects || []).map((o) => o.ref));
@@ -389,7 +425,42 @@
     return { lifelines, entry, body: a2(entryNode.children) };
   }
 
+  /** Draft activity key: every action and every step between actions in the model, with its guard. */
+  function activityKey(model) {
+    const g = G.actGraph(model);
+    const ref = {};
+    const actions = [];
+    for (const n of g.nodes) {
+      if (n.kind === 'start' || n.kind === 'end') ref[n.id] = n.kind;
+      else if (n.kind === 'action' && clean(n.name)) {
+        ref[n.id] = n.id;
+        actions.push({ ref: n.id, label: clean(n.name), name: [clean(n.name).toLowerCase()] });
+      }
+    }
+    const T = G.actSteps(g, (n) => !!ref[n.id]);
+    const steps = [];
+    for (const [id, list] of Object.entries(T)) for (const t of list) {
+      const f = { from: ref[id], to: ref[t.to] };
+      if (t.guards.length) f.guard = [t.guards[t.guards.length - 1]];
+      if (t.forks + t.implicitForks) f.via = 'fork';
+      else if (t.joins + t.implicitJoins && g.nodes.some((n) => n.kind === 'bar')) f.via = 'join';
+      if (!steps.some((s) => same(s, f))) steps.push(f);
+    }
+    // one entry per merge (same target, guard and via) and per fork (same source); end nodes are separate
+    const flows = [];
+    for (const f of steps) {
+      const sig = (x) => JSON.stringify([x.to, x.guard || null, x.via || null]);
+      const merge = f.via !== 'fork' && f.to !== 'end' && flows.find((x) => !Array.isArray(x.to) && sig(x) === sig(f));
+      const fork = f.via === 'fork' && flows.find((x) => x.via === 'fork' && same([].concat(x.from), [f.from]));
+      if (merge) merge.from = [].concat(merge.from, f.from);
+      else if (fork) fork.to = [].concat(fork.to, f.to);
+      else flows.push(clone(f));
+    }
+    return { actions, flows };
+  }
+
   function generateKey(mode, model) {
+    if (mode === 'activity') return activityKey(model);
     if (mode === 'sequence') return seqKey(model);
     if (mode === 'object') return objectKey(model);
     return classKey(model);
@@ -398,11 +469,12 @@
   // ---------------- blanks ----------------
 
   const emptyDiagram = (mode) => (mode === 'sequence' ? { lifelines: [], rows: [] } : { nodes: [], edges: [] });
-  const emptyKey = (mode) => (mode === 'sequence' ? { lifelines: [], entry: { to: '', method: '' }, body: [] } : mode === 'object' ? { objects: [], links: [] } : { classes: {}, relations: [] });
+  const emptyKey = (mode) => (mode === 'activity' ? { actions: [], flows: [] } : mode === 'sequence' ? { lifelines: [], entry: { to: '', method: '' }, body: [] } : mode === 'object' ? { objects: [], links: [] } : { classes: {}, relations: [] });
   const PROMPTS = {
     class: 'Draw a class diagram to represent the code. Show all attributes, methods, associations, navigabilities, visibilities, known multiplicities, and association roles. Show associations as lines.',
     object: 'Draw an object diagram for the situation where ...',
     sequence: 'Draw a sequence diagram for ... being called on a ... object. Show activation bars and return values.',
+    activity: 'Draw an activity diagram for ... Show the start and end, every action, branches with guards, and steps that happen at the same time.',
   };
   function blankPart(id, mode) {
     return { id, mode, prompt: PROMPTS[mode], canvas: { width: 1000, height: 640 }, starter: emptyDiagram(mode), key: emptyKey(mode), model: emptyDiagram(mode), examples: [] };
@@ -411,5 +483,5 @@
     return { id, title: 'New question', source: 'Original question for UML Drill.', author: '', tags: [], code: [{ file: 'Main.java', text: '' }], parts: [blankPart('a', 'class')] };
   }
 
-  return { applyPatch, diffPatch, exampleDiagram, validateQuestion, checkQuestion, generateKey, blankQuestion, blankPart, emptyDiagram, emptyKey };
+  return { applyPatch, diffPatch, exampleDiagram, validateQuestion, checkQuestion, generateKey, blankQuestion, blankPart, emptyDiagram, emptyKey, MODES };
 });

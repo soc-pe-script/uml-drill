@@ -1,6 +1,6 @@
 # UML Drill
 
-Practice CS2103T-style UML questions. Read the code, draw the class, object or sequence diagram with a toolbox, and get it graded mistake by mistake, the way the tutorials count errors.
+Practice CS2103T-style UML questions. Read the code (or the process description), draw the class, object, sequence or activity diagram with a toolbox, and get it graded mistake by mistake, the way the tutorials count errors.
 
 The grader is flexible where the course is: it accepts common alternatives (for example parameter types without names, or composition where an association also fits) and lists them as notes instead of errors.
 
