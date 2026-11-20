@@ -1,0 +1,257 @@
+{
+  "id": "parcel-locker",
+  "title": "Parcel locker drop-off",
+  "source": "Original question for UML Drill, written to practise the activity-diagram ideas in an exam-style revision sheet (parallel steps, a retry loop, two ways to finish).",
+  "author": "soc-pe-script",
+  "tags": ["activity-diagram", "fork-join", "loop", "guards"],
+  "code": [
+    {
+      "file": "Description.txt",
+      "text": "A courier drops parcels at a self-service parcel locker.\n\n1. The courier logs in at the locker's screen.\n2. The courier scans a parcel's barcode.\n3. If the locker does not recognise the barcode, the courier sets the parcel aside to take back to the depot.\n4. If the barcode is recognised but no compartment of the right size is free, the locker shows \"Locker full\" and the drop-off ends at once. The courier keeps the remaining parcels.\n5. Otherwise the locker opens a free compartment. Then two things happen at the same time: the courier puts the parcel in and closes the door, while the locker sends the recipient a pickup code by SMS. When both are done, the locker marks the parcel delivered.\n6. After step 3 or step 5, if the courier has more parcels, they go on with the next one from step 2. When there are no more parcels, the courier logs out and the drop-off ends."
+    }
+  ],
+  "parts": [
+    {
+      "id": "a",
+      "mode": "activity",
+      "prompt": "Draw an activity diagram for one drop-off session, from the courier logging in until the session ends. Show every action, the branches with their guards, and the steps that happen at the same time.",
+      "canvas": { "width": 1000, "height": 980 },
+      "starter": { "nodes": [], "edges": [] },
+      "key": {
+        "actions": [
+          { "ref": "login", "label": "Log in", "name": ["log in", "login", "sign in"] },
+          { "ref": "scan", "label": "Scan parcel", "name": ["scan"] },
+          { "ref": "aside", "label": "Set parcel aside", "name": ["aside", "depot"] },
+          { "ref": "full", "label": "Show \"Locker full\"", "name": ["full", "no free compartment", "no compartment"] },
+          { "ref": "open", "label": "Open compartment", "name": ["open"] },
+          { "ref": "place", "label": "Put parcel in and close door", "name": ["put", "place", "insert", "deposit", "close door"] },
+          { "ref": "send", "label": "Send pickup code", "name": ["send", "sms", "pickup code", "notify"] },
+          { "ref": "delivered", "label": "Mark parcel delivered", "name": ["delivered"] },
+          { "ref": "logout", "label": "Log out", "name": ["log out", "logout", "sign out"] }
+        ],
+        "flows": [
+          { "from": "start", "to": "login" },
+          { "from": "login", "to": "scan" },
+          {
+            "from": "scan", "to": "aside",
+            "guard": ["not recognised", "not recognized", "unrecognised", "unrecognized", "unknown", "invalid", "not found", "no match"]
+          },
+          {
+            "from": "scan", "to": "full",
+            "guard": ["no free compartment", "full", "no free", "not free", "no compartment", "no space"]
+          },
+          {
+            "from": "scan", "to": "open",
+            "guard": ["free compartment", "free", "available", "space", "empty compartment", "else"]
+          },
+          {
+            "from": "full", "to": "end",
+            "mistakes": [
+              { "to": ["logout", "scan"], "msg": "When the locker is full the drop-off ends at once (step 4). Draw a flow from \"Locker full\" straight to an end node; the courier does not go on to the next parcel or log out." }
+            ]
+          },
+          {
+            "from": "open", "to": ["place", "send"], "via": "fork",
+            "mistakes": [
+              { "via": "sequence", "msg": "The courier puts the parcel in while the locker sends the SMS (step 5). Steps that happen at the same time go between a fork bar and a join bar, not one after the other." },
+              { "via": "decision", "msg": "Both things happen, not one or the other. Use a fork bar (a thick line) after \"Open compartment\", not a branch diamond." }
+            ]
+          },
+          {
+            "from": ["place", "send"], "to": "delivered", "via": "join",
+            "mistakes": [
+              { "via": "sequence", "msg": "The courier puts the parcel in while the locker sends the SMS (step 5). Steps that happen at the same time go between a fork bar and a join bar, not one after the other." },
+              { "via": "merge", "credit": 0.5, "msg": "A merge diamond lets the first finished path straight through. The parcel is marked delivered only when both are done, so bring the two paths into a join bar." }
+            ]
+          },
+          {
+            "from": ["aside", "delivered"], "to": "scan",
+            "guard": ["more parcels", "more", "another parcel", "parcels left", "remaining"],
+            "mistakes": [
+              { "to": "login", "credit": 0.5, "msg": "The courier logs in once per session. After each parcel the loop goes back to scanning the next parcel, not to logging in again." }
+            ]
+          },
+          {
+            "from": ["aside", "delivered"], "to": "logout",
+            "guard": ["no more parcels", "no more", "none left", "no parcels", "done", "finished", "else"]
+          },
+          {
+            "from": "login", "to": "logout", "optional": true,
+            "guard": ["no more parcels", "no more", "none left", "no parcels", "done", "finished", "else"]
+          },
+          { "from": "logout", "to": "end" }
+        ]
+      },
+      "model": {
+        "nodes": [
+          { "id": "start", "kind": "start", "name": "", "x": 487, "y": 20 },
+          { "id": "login", "kind": "action", "name": "Log in", "x": 440, "y": 70 },
+          { "id": "m1", "kind": "decision", "name": "", "x": 480, "y": 140 },
+          { "id": "scan", "kind": "action", "name": "Scan parcel", "x": 440, "y": 200 },
+          { "id": "d1", "kind": "decision", "name": "", "x": 480, "y": 270 },
+          { "id": "aside", "kind": "action", "name": "Set parcel aside", "x": 150, "y": 268 },
+          { "id": "d2", "kind": "decision", "name": "", "x": 480, "y": 340 },
+          { "id": "full", "kind": "action", "name": "Show \"Locker full\"", "x": 740, "y": 338 },
+          { "id": "end1", "kind": "end", "name": "", "x": 808, "y": 420 },
+          { "id": "open", "kind": "action", "name": "Open compartment", "x": 426, "y": 410 },
+          { "id": "fork", "kind": "bar", "name": "", "x": 300, "y": 480, "w": 400 },
+          { "id": "place", "kind": "action", "name": "Put parcel in and close door", "x": 250, "y": 520 },
+          { "id": "send", "kind": "action", "name": "Send pickup code", "x": 560, "y": 520 },
+          { "id": "join", "kind": "bar", "name": "", "x": 300, "y": 600, "w": 400 },
+          { "id": "delivered", "kind": "action", "name": "Mark parcel delivered", "x": 407, "y": 630 },
+          { "id": "m2", "kind": "decision", "name": "", "x": 480, "y": 700 },
+          { "id": "d3", "kind": "decision", "name": "", "x": 480, "y": 770 },
+          { "id": "logout", "kind": "action", "name": "Log out", "x": 440, "y": 850 },
+          { "id": "end2", "kind": "end", "name": "", "x": 486, "y": 920 }
+        ],
+        "edges": [
+          { "id": "f1", "type": "flow", "from": "start", "to": "login", "guard": "" },
+          { "id": "f2", "type": "flow", "from": "login", "to": "m1", "guard": "" },
+          { "id": "f3", "type": "flow", "from": "m1", "to": "scan", "guard": "" },
+          { "id": "f4", "type": "flow", "from": "scan", "to": "d1", "guard": "" },
+          { "id": "f5", "type": "flow", "from": "d1", "to": "aside", "guard": "not recognised" },
+          { "id": "f6", "type": "flow", "from": "d1", "to": "d2", "guard": "recognised" },
+          { "id": "f7", "type": "flow", "from": "d2", "to": "full", "guard": "no free compartment" },
+          { "id": "f8", "type": "flow", "from": "d2", "to": "open", "guard": "free compartment" },
+          { "id": "f9", "type": "flow", "from": "full", "to": "end1", "guard": "" },
+          { "id": "f10", "type": "flow", "from": "open", "to": "fork", "guard": "" },
+          { "id": "f11", "type": "flow", "from": "fork", "to": "place", "guard": "" },
+          { "id": "f12", "type": "flow", "from": "fork", "to": "send", "guard": "" },
+          { "id": "f13", "type": "flow", "from": "place", "to": "join", "guard": "" },
+          { "id": "f14", "type": "flow", "from": "send", "to": "join", "guard": "" },
+          { "id": "f15", "type": "flow", "from": "join", "to": "delivered", "guard": "" },
+          { "id": "f16", "type": "flow", "from": "delivered", "to": "m2", "guard": "" },
+          { "id": "f17", "type": "flow", "from": "aside", "to": "m2", "guard": "", "route": "left" },
+          { "id": "f18", "type": "flow", "from": "m2", "to": "d3", "guard": "" },
+          { "id": "f19", "type": "flow", "from": "d3", "to": "m1", "guard": "more parcels", "route": "right" },
+          { "id": "f20", "type": "flow", "from": "d3", "to": "logout", "guard": "no more parcels" },
+          { "id": "f21", "type": "flow", "from": "logout", "to": "end2", "guard": "" }
+        ]
+      },
+      "examples": [
+        {
+          "name": "Loop checked before scanning (while-style), also accepted",
+          "expect": { "errors": 0, "partials": 0, "notes": 0 },
+          "patch": {
+            "removeNodes": ["m2"],
+            "edges": { "f3": { "to": "d3" }, "f19": { "to": "scan", "route": "" } },
+            "addEdges": [
+              { "id": "x1", "type": "flow", "from": "delivered", "to": "m1", "guard": "", "route": "right" },
+              { "id": "x2", "type": "flow", "from": "aside", "to": "m1", "guard": "", "route": "left" }
+            ]
+          }
+        },
+        {
+          "name": "Parallel steps drawn one after the other",
+          "expect": { "errors": 2, "partials": 0, "score": 20 },
+          "patch": {
+            "removeNodes": ["fork", "join"],
+            "addEdges": [
+              { "id": "x1", "type": "flow", "from": "open", "to": "place", "guard": "" },
+              { "id": "x2", "type": "flow", "from": "place", "to": "send", "guard": "" },
+              { "id": "x3", "type": "flow", "from": "send", "to": "delivered", "guard": "" }
+            ]
+          }
+        },
+        {
+          "name": "Branch diamond instead of a fork bar",
+          "expect": { "errors": 1, "partials": 0 },
+          "patch": { "nodes": { "fork": { "kind": "decision", "x": 480, "y": 466 } } }
+        },
+        {
+          "name": "Merge diamond instead of a join bar",
+          "expect": { "errors": 0, "partials": 1, "score": 21.5 },
+          "patch": { "nodes": { "join": { "kind": "decision", "x": 480, "y": 580 } } }
+        },
+        {
+          "name": "No join bar: both paths go straight into the next action",
+          "expect": { "errors": 0, "partials": 1 },
+          "patch": {
+            "removeNodes": ["join"],
+            "addEdges": [
+              { "id": "x1", "type": "flow", "from": "place", "to": "delivered", "guard": "" },
+              { "id": "x2", "type": "flow", "from": "send", "to": "delivered", "guard": "" }
+            ]
+          }
+        },
+        {
+          "name": "Loop goes back to Log in",
+          "expect": { "errors": 0, "partials": 1 },
+          "patch": {
+            "edges": {
+              "f1": { "to": "m1" },
+              "f2": { "from": "m1", "to": "login" },
+              "f3": { "from": "login" }
+            }
+          }
+        },
+        {
+          "name": "Loop arrow goes straight into Scan parcel (no merge node)",
+          "expect": { "errors": 0, "partials": 1 },
+          "patch": {
+            "removeNodes": ["m1"],
+            "addEdges": [
+              { "id": "x1", "type": "flow", "from": "login", "to": "scan", "guard": "" },
+              { "id": "x2", "type": "flow", "from": "d3", "to": "scan", "guard": "more parcels", "route": "right" }
+            ]
+          }
+        },
+        {
+          "name": "Loop guards swapped",
+          "expect": { "errors": 1, "partials": 0 },
+          "patch": { "edges": { "f19": { "guard": "no more parcels" }, "f20": { "guard": "more parcels" } } }
+        },
+        {
+          "name": "No guards on the compartment check",
+          "expect": { "errors": 1, "partials": 0 },
+          "patch": { "edges": { "f7": { "guard": "" }, "f8": { "guard": "" } } }
+        },
+        {
+          "name": "Question in the diamond, [yes]/[no] guards",
+          "expect": { "errors": 0, "partials": 0, "notes": 1 },
+          "patch": {
+            "nodes": { "d3": { "name": "More parcels?", "x": 445, "y": 762 } },
+            "edges": { "f19": { "guard": "yes" }, "f20": { "guard": "no" } }
+          }
+        },
+        {
+          "name": "Guard worded differently from the key",
+          "expect": { "errors": 0, "partials": 1 },
+          "patch": { "edges": { "f8": { "guard": "size ok" } } }
+        },
+        {
+          "name": "Locker full goes on to the next parcel",
+          "expect": { "errors": 1, "partials": 0 },
+          "patch": { "edges": { "f9": { "to": "m2", "route": "right" } } }
+        },
+        {
+          "name": "Set parcel aside left out",
+          "expect": { "errors": 1, "partials": 0, "score": 21 },
+          "patch": {
+            "removeNodes": ["aside"],
+            "addEdges": [{ "id": "x1", "type": "flow", "from": "d1", "to": "m2", "guard": "not recognised", "route": "left" }]
+          }
+        },
+        {
+          "name": "Set parcel aside worded as Reject parcel",
+          "expect": { "errors": 0, "partials": 1 },
+          "patch": { "nodes": { "aside": { "name": "Reject parcel" } } }
+        },
+        {
+          "name": "Extra action that is not in the description",
+          "expect": { "errors": 1, "partials": 0 },
+          "patch": {
+            "edges": { "f6": { "to": "check" } },
+            "addNodes": [{ "id": "check", "kind": "action", "name": "Weigh parcel", "x": 700, "y": 250 }],
+            "addEdges": [{ "id": "x1", "type": "flow", "from": "check", "to": "d2", "guard": "" }]
+          }
+        },
+        {
+          "name": "Empty diagram",
+          "expect": { "score": 0 },
+          "diagram": { "nodes": [], "edges": [] }
+        }
+      ]
+    }
+  ]
+}
